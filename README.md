@@ -1,6 +1,6 @@
 # λuwecode
 
-A purely functional language based entirely on [lambda calculus](https://en.wikipedia.org/wiki/Lambda_calculus)
+A purely functional language based entirely on pure [lambda calculus](https://en.wikipedia.org/wiki/Lambda_calculus)
 
 ## Outline:
 - No special types; numbers, booleans, strings, lists, etc. are based in pure lambda calculus
