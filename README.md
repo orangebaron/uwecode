@@ -1,4 +1,4 @@
-# uwecode
+# λuwecode
 
 A purely functional language based entirely on [lambda calculus](https://en.wikipedia.org/wiki/Lambda_calculus)
 
