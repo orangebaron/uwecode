@@ -9,16 +9,6 @@ type obj interface {
 	replace(int, obj) obj
 }
 
-// a -> x where x is the same regardless of a
-type consObj struct {
-	x obj
-}
-
-func (f consObj) call(_ obj) obj           { return f.x }
-func (f consObj) simplify() obj            { return consObj{f.x.simplify()} }
-func (f consObj) simplifyFully() obj       { return consObj{f.x.simplifyFully()} }
-func (f consObj) replace(_ int, _ obj) obj { return f }
-
 // the last y in x->y->y
 type returnVal struct {
 	n int
