@@ -50,18 +50,52 @@ type called struct {
 	y obj
 }
 
-func (f called) call(a obj) obj           { return called{f.x.call(f.y), a} }
-func (f called) simplify() obj            { return f.x.call(f.y) }
-func (f called) simplifyFully() obj       { return f.x.call(f.y).simplifyFully() }
+func (f called) call(a obj) obj { return called{f.x.call(f.y), a} }
+func (f called) simplify() obj  { return f.x.call(f.y) }
+func (f called) simplifyFully() obj {
+	switch f.x.(type) {
+	case returnVal:
+		return called{f.x, f.y.simplifyFully()}
+	default:
+		return f.x.call(f.y).simplifyFully()
+	}
+}
 func (f called) replace(n int, x obj) obj { return called{f.x.replace(n, x), f.y.replace(n, x)} }
 
+// a -> b -> a (a (a ...num times... (a b))))
+type churchNum struct {
+	num int
+}
+
+func (f churchNum) call(a obj) obj           { return calledChurchNum{f.num, a} } // TODO: if a is a churchNum, return churchNum{a.num ^ f.num}
+func (f churchNum) simplify() obj            { return f }
+func (f churchNum) simplifyFully() obj       { return f }
+func (f churchNum) replace(_ int, _ obj) obj { return f }
+
+// a -> x (x (x ...num times... (x a))))
+type calledChurchNum struct {
+	num int
+	x   obj
+}
+
+func (f calledChurchNum) call(a obj) obj {
+	switch f.num { // TODO: make a calledCalledChurchNum type that, when simplifyFully'd, does this all at once in one loop
+	case 0:
+		return a
+	default:
+		return called{calledChurchNum{f.num - 1, f.x}, f.x.call(a)}
+	}
+}
+func (f calledChurchNum) simplify() obj            { return f }
+func (f calledChurchNum) simplifyFully() obj       { return f }
+func (f calledChurchNum) replace(_ int, _ obj) obj { return f }
+
 func main() {
-	two := function{0, function{1, called{returnVal{0}, called{returnVal{0}, returnVal{1}}}}}                                     // f -> x -> f (f x)
-	incr := function{0, function{1, function{2, called{called{returnVal{0}, returnVal{1}}, called{returnVal{1}, returnVal{2}}}}}} // n -> f -> x -> n f (f x)
-	three := incr.call(two)                                                                                                       // f -> x -> f (f (f x))
-	aba := function{0, function{1, returnVal{0}}}                                                                                 // a -> b -> a
-	nine := two.call(three)                                                                                                       // don't feel like typing this out
-	veryCool := nine.call(aba).call(aba)                                                                                          // f1 -> f2 -> ... -> f9 -> a -> b -> a
-	fmt.Println(veryCool.simplify())
-	fmt.Println(veryCool.simplifyFully())
+	two := churchNum{2}
+	incr := function{0, function{1, function{2, called{called{returnVal{0}, returnVal{1}}, called{returnVal{1}, returnVal{2}}}}}}
+	three := incr.call(two)
+	aba := function{0, function{1, returnVal{0}}}
+	nine := two.call(three)
+	veryCool := nine.call(aba).call(aba)
+	fmt.Printf("%+v\n", veryCool.simplifyFully())
 }
