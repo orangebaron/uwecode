@@ -1,17 +1,13 @@
 package main
 
+import "fmt"
+
 type obj interface {
 	call(obj) obj
 	simplify() obj
+	simplifyFully() obj
 	replace(int, obj) obj
 }
-
-// a -> a
-type id struct{}
-
-func (_ id) call(a obj) obj           { return a }
-func (_ id) simplify() obj            { return id{} }
-func (_ id) replace(_ int, _ obj) obj { return id{} }
 
 // a -> x where x is the same regardless of a
 type consObj struct {
@@ -20,21 +16,23 @@ type consObj struct {
 
 func (f consObj) call(_ obj) obj           { return f.x }
 func (f consObj) simplify() obj            { return consObj{f.x.simplify()} }
+func (f consObj) simplifyFully() obj       { return consObj{f.x.simplifyFully()} }
 func (f consObj) replace(_ int, _ obj) obj { return f }
 
-// a -> (value of n) where value of n is the same regardless of a
-type consInt struct {
+// the last y in x->y->y
+type returnVal struct {
 	n int
 }
 
-func (_ consInt) call(_ obj) obj { panic("consInt was called (should never happen)") }
-func (f consInt) simplify() obj  { return f }
-func (f consInt) replace(n int, x obj) obj {
+func (f returnVal) call(x obj) obj     { return called{f, x} }
+func (f returnVal) simplify() obj      { return f }
+func (f returnVal) simplifyFully() obj { return f }
+func (f returnVal) replace(n int, x obj) obj {
 	switch n {
 	case f.n:
 		return x
 	default:
-		return consObj{x}
+		return f
 	}
 }
 
@@ -44,8 +42,9 @@ type function struct {
 	x obj
 }
 
-func (f function) call(a obj) obj { return f.x.replace(f.n, a) }
-func (f function) simplify() obj  { return function{f.n, f.x.simplify()} }
+func (f function) call(a obj) obj     { return f.x.replace(f.n, a) }
+func (f function) simplify() obj      { return function{f.n, f.x.simplify()} }
+func (f function) simplifyFully() obj { return function{f.n, f.x.simplifyFully()} }
 func (f function) replace(n int, x obj) obj {
 	switch f.n {
 	case n:
@@ -63,6 +62,16 @@ type called struct {
 
 func (f called) call(a obj) obj           { return called{f.x.call(f.y), a} }
 func (f called) simplify() obj            { return f.x.call(f.y) }
+func (f called) simplifyFully() obj       { return f.x.call(f.y).simplifyFully() }
 func (f called) replace(n int, x obj) obj { return called{f.x.replace(n, x), f.y.replace(n, x)} }
 
-func main() {}
+func main() {
+	two := function{0, function{1, called{returnVal{0}, called{returnVal{0}, returnVal{1}}}}}                                     // f -> x -> f (f x)
+	incr := function{0, function{1, function{2, called{called{returnVal{0}, returnVal{1}}, called{returnVal{1}, returnVal{2}}}}}} // n -> f -> x -> n f (f x)
+	three := incr.call(two)                                                                                                       // f -> x -> f (f (f x))
+	aba := function{0, function{1, returnVal{0}}}                                                                                 // a -> b -> a
+	nine := two.call(three)                                                                                                       // don't feel like typing this out
+	veryCool := nine.call(aba).call(aba)                                                                                          // f1 -> f2 -> ... -> f9 -> a -> b -> a
+	fmt.Println(veryCool.simplify())
+	fmt.Println(veryCool.simplifyFully())
+}
