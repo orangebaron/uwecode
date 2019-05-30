@@ -79,16 +79,38 @@ type calledChurchNum struct {
 }
 
 func (f calledChurchNum) call(a obj) obj {
-	switch f.num { // TODO: make a calledCalledChurchNum type that, when simplifyFully'd, does this all at once in one loop
-	case 0:
-		return a
-	default:
-		return called{calledChurchNum{f.num - 1, f.x}, f.x.call(a)}
-	}
+	return calledCalledChurchNum{f.num, f.x, a}
 }
 func (f calledChurchNum) simplify() obj            { return f }
 func (f calledChurchNum) simplifyFully() obj       { return f }
 func (f calledChurchNum) replace(_ int, _ obj) obj { return f }
+
+// a -> (x (x (x ... num times ... (x y)))) a
+type calledCalledChurchNum struct {
+	num int
+	x   obj
+	y   obj
+}
+
+func (f calledCalledChurchNum) call(a obj) obj { return called{f, a} }
+func (f calledCalledChurchNum) simplify() obj {
+	switch f.num {
+	case 0:
+		return f.y
+	default:
+		return calledCalledChurchNum{f.num - 1, f.x.call(f.y), f.y}
+	}
+}
+func (f calledCalledChurchNum) simplifyFully() obj {
+	for i := 0; i < f.num; i++ {
+		f.y = f.x.call(f.y)
+	}
+	return f.y
+}
+
+func (f calledCalledChurchNum) replace(n int, x obj) obj {
+	return calledCalledChurchNum{f.num, f.x.replace(n, x), f.y.replace(n, x)}
+}
 
 func main() {
 	two := churchNum{2}
