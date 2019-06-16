@@ -92,7 +92,7 @@ type calledCalledChurchNum struct {
 	y   obj
 }
 
-func (f calledCalledChurchNum) call(a obj) obj { return called{f, a} }
+func (f calledCalledChurchNum) call(a obj) obj { return called{f.simplify(), a} }
 func (f calledCalledChurchNum) simplify() obj {
 	switch f.num {
 	case 0:
@@ -107,7 +107,6 @@ func (f calledCalledChurchNum) simplifyFully() obj {
 	}
 	return f.y
 }
-
 func (f calledCalledChurchNum) replace(n int, x obj) obj {
 	return calledCalledChurchNum{f.num, f.x.replace(n, x), f.y.replace(n, x)}
 }
