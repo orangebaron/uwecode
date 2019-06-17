@@ -111,7 +111,7 @@ func (f calledCalledChurchNum) replace(n int, x obj) obj {
 	return calledCalledChurchNum{f.num, f.x.replace(n, x), f.y.replace(n, x)}
 }
 
-//
+// n -> f -> x -> (n f) (f x) aka n -> n+1
 type incrFunction struct {}
 
 var incrFunctionNormalForm = function{0, function{1, function{2, called{called{returnVal{0}, returnVal{1}}, called{returnVal{1}, returnVal{2}}}}}}
