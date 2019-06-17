@@ -1,10 +1,10 @@
 # λuwecode
 
-A purely functional language based entirely on pure [lambda calculus](https://en.wikipedia.org/wiki/Lambda_calculus)
+a purely functional language based entirely on pure [lambda calculus](https://en.wikipedia.org/wiki/Lambda_calculus)
 
-## Outline:
-- No special types; numbers, booleans, strings, lists, etc. are based in pure lambda calculus
+## outline:
+- no special types; numbers, booleans, strings, lists, etc. are based in pure lambda calculus
 - IO system is based in pure lambda calculus
-- Type system is based in pure lambda calculus
-- No keywords except for import directives
-- Inline functions are interchangeable with prefixed calling: ``a `b c`` == `b a c`
+- type system is based in pure lambda calculus
+- no keywords except for import directives
+- inline functions are interchangeable with prefixed calling: ``a `b c`` == `b a c`
