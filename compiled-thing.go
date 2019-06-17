@@ -111,12 +111,29 @@ func (f calledCalledChurchNum) replace(n int, x obj) obj {
 	return calledCalledChurchNum{f.num, f.x.replace(n, x), f.y.replace(n, x)}
 }
 
+//
+type incrFunction struct {}
+
+var incrFunctionNormalForm = function{0, function{1, function{2, called{called{returnVal{0}, returnVal{1}}, called{returnVal{1}, returnVal{2}}}}}}
+
+func (f incrFunction) call(a obj) obj {
+	switch at := a.(type) {
+	case churchNum:
+		return churchNum{at.num + 1}
+	default:
+		return incrFunctionNormalForm.call(a)
+	}
+}
+func (f incrFunction) simplify() obj { return f }
+func (f incrFunction) simplifyFully() obj { return f }
+func (f incrFunction) replace(n int, x obj) obj { return f }
+
 func main() {
 	two := churchNum{2}
-	incr := function{0, function{1, function{2, called{called{returnVal{0}, returnVal{1}}, called{returnVal{1}, returnVal{2}}}}}}
-	three := incr.call(two)
+	three := incrFunction{}.call(two)
 	aba := function{0, function{1, returnVal{0}}}
 	nine := two.call(three)
 	veryCool := nine.call(aba).call(aba)
 	fmt.Printf("%+v\n", veryCool.simplifyFully())
+	fmt.Println(churchNum{3}.call(incrFunction{}).call(churchNum{0}).simplifyFully())
 }
