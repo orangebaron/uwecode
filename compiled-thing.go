@@ -112,7 +112,7 @@ func (f calledCalledChurchNum) replace(n int, x obj) obj {
 }
 
 // n -> f -> x -> (n f) (f x) aka n -> n+1
-type incrFunction struct {}
+type incrFunction struct{}
 
 var incrFunctionNormalForm = function{0, function{1, function{2, called{called{returnVal{0}, returnVal{1}}, called{returnVal{1}, returnVal{2}}}}}}
 
@@ -124,8 +124,8 @@ func (f incrFunction) call(a obj) obj {
 		return incrFunctionNormalForm.call(a)
 	}
 }
-func (f incrFunction) simplify() obj { return f }
-func (f incrFunction) simplifyFully() obj { return f }
+func (f incrFunction) simplify() obj            { return f }
+func (f incrFunction) simplifyFully() obj       { return f }
 func (f incrFunction) replace(n int, x obj) obj { return f }
 
 func main() {
