@@ -51,14 +51,12 @@ type Called struct {
 func (f Called) Call(a Obj) Obj { return Called{f.X.Call(f.Y), a} }
 func (f Called) Simplify() Obj  { return f.X.Call(f.Y) }
 func (f Called) SimplifyFully() Obj {
-	switch f.X.(type) {
-	case ReturnVal:
-		return Called{f.X, f.Y.SimplifyFully()}
-	case ArbitraryVal:
-		return Called{f.X, f.Y.SimplifyFully()}
-	default:
-		return f.X.Call(f.Y).SimplifyFully()
+	v := f.X.Call(f.Y.SimplifyFully())
+	_, isCalled := v.(Called)
+	if !isCalled {
+		v = v.SimplifyFully()
 	}
+	return v
 }
 func (f Called) Replace(n int, x Obj) Obj { return Called{f.X.Replace(n, x), f.Y.Replace(n, x)} }
 
@@ -110,30 +108,3 @@ func (f CalledCalledChurchNum) SimplifyFully() Obj {
 func (f CalledCalledChurchNum) Replace(n int, x Obj) Obj {
 	return CalledCalledChurchNum{f.Num, f.X.Replace(n, x), f.Y.Replace(n, x)}
 }
-
-// N -> f -> X -> (n f) (f x) aka n -> n+1
-type IncrFunction struct{}
-
-var IncrFunctionNormalForm = Function{0, Function{1, Function{2, Called{Called{ReturnVal{0}, ReturnVal{1}}, Called{ReturnVal{1}, ReturnVal{2}}}}}}
-
-func (f IncrFunction) Call(a Obj) Obj {
-	switch at := a.(type) {
-	case ChurchNum:
-		return ChurchNum{at.Num + 1}
-	default:
-		return IncrFunctionNormalForm.Call(a)
-	}
-}
-func (f IncrFunction) Simplify() Obj            { return f }
-func (f IncrFunction) SimplifyFully() Obj       { return f }
-func (f IncrFunction) Replace(n int, x Obj) Obj { return f }
-
-// arbitrary value identified by id
-type ArbitraryVal struct {
-	id int
-}
-
-func (f ArbitraryVal) Call(x Obj) Obj           { return Called{f, x} }
-func (f ArbitraryVal) Simplify() Obj            { return f }
-func (f ArbitraryVal) SimplifyFully() Obj       { return f }
-func (f ArbitraryVal) Replace(n int, x Obj) Obj { return f }
