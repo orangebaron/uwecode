@@ -9,7 +9,7 @@ a purely functional language based entirely on pure [lambda calculus](https://en
 ## types:
 ```
 number: (x -> x) -> x -> x
-boolean: x -> x -> x
+bool: x -> x -> x
 maybe a: (a -> x) -> x -> x
 either a b: (a -> x) -> (b -> x) -> x
 a,b: (a -> b -> x) -> x
@@ -17,6 +17,6 @@ a,b: (a -> b -> x) -> x
 byte: (((bool,bool),(bool,bool)),((bool,bool),(bool,bool)))
 str: [byte]
 IO: either (either (str -> IO) (str,IO)) (IO,IO)
-type: either (bool,(type,type)) number ?
+type: either number (type,type)
 ```
 will describe more later
