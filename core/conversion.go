@@ -14,3 +14,8 @@ func ObjToInt(f Obj) uint {
 		}
 	}
 }
+
+func ObjToBool(f Obj) bool {
+	c := f.Call(ArbitraryVal{0}).Call(ArbitraryVal{1}).SimplifyFully()
+	return c.(ArbitraryVal).id == 0
+}
