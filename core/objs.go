@@ -1,6 +1,4 @@
-package main
-
-import "fmt"
+package core
 
 type obj interface {
 	call(obj) obj
@@ -139,13 +137,3 @@ func (f arbitraryVal) call(x obj) obj           { return called{f, x} }
 func (f arbitraryVal) simplify() obj            { return f }
 func (f arbitraryVal) simplifyFully() obj       { return f }
 func (f arbitraryVal) replace(n int, x obj) obj { return f }
-
-func main() {
-	two := churchNum{2}
-	three := incrFunction{}.call(two)
-	aba := function{0, function{1, returnVal{0}}}
-	nine := two.call(three)
-	veryCool := nine.call(aba).call(aba)
-	fmt.Printf("%+v\n", veryCool.simplifyFully())
-	fmt.Printf("%+v\n", three.call(arbitraryVal{0}).call(arbitraryVal{1}).simplifyFully())
-}
