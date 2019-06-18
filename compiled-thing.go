@@ -56,6 +56,8 @@ func (f called) simplifyFully() obj {
 	switch f.x.(type) {
 	case returnVal:
 		return called{f.x, f.y.simplifyFully()}
+	case arbitraryVal:
+		return called{f.x, f.y.simplifyFully()}
 	default:
 		return f.x.call(f.y).simplifyFully()
 	}
@@ -128,6 +130,16 @@ func (f incrFunction) simplify() obj            { return f }
 func (f incrFunction) simplifyFully() obj       { return f }
 func (f incrFunction) replace(n int, x obj) obj { return f }
 
+// arbitrary value identified by id
+type arbitraryVal struct {
+	id int
+}
+
+func (f arbitraryVal) call(x obj) obj           { return called{f, x} }
+func (f arbitraryVal) simplify() obj            { return f }
+func (f arbitraryVal) simplifyFully() obj       { return f }
+func (f arbitraryVal) replace(n int, x obj) obj { return f }
+
 func main() {
 	two := churchNum{2}
 	three := incrFunction{}.call(two)
@@ -135,5 +147,5 @@ func main() {
 	nine := two.call(three)
 	veryCool := nine.call(aba).call(aba)
 	fmt.Printf("%+v\n", veryCool.simplifyFully())
-	fmt.Println(churchNum{3}.call(incrFunction{}).call(churchNum{0}).simplifyFully())
+	fmt.Printf("%+v\n", three.call(arbitraryVal{0}).call(arbitraryVal{1}).simplifyFully())
 }
