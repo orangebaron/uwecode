@@ -2,25 +2,30 @@ package core
 
 // arbitrary value identified by id
 type ArbitraryVal struct {
-        id int
+	id uint
 }
 
-func (f ArbitraryVal) Call(x Obj) Obj           { return Called{f, x} }
-func (f ArbitraryVal) Simplify() Obj            { return f }
-func (f ArbitraryVal) SimplifyFully() Obj       { return f }
-func (f ArbitraryVal) Replace(n int, x Obj) Obj { return f }
+func (f ArbitraryVal) Call(x Obj) Obj            { return Called{f, x} }
+func (f ArbitraryVal) Simplify() Obj             { return f }
+func (f ArbitraryVal) SimplifyFully() Obj        { return f }
+func (f ArbitraryVal) Replace(n uint, x Obj) Obj { return f }
 
 // assumes that the given Obj is actually a number
 func ObjToInt(f Obj) uint {
-	var n uint = 0
-	c := f.Call(ArbitraryVal{0}).Call(ArbitraryVal{1}).SimplifyFully()
-	for {
-		switch v := c.(type) {
-		case Called:
-			n++
-			c = v.Y
-		case ArbitraryVal:
-			return n
+	cn, isChurchNum := f.(ChurchNum)
+	if isChurchNum {
+		return cn.Num
+	} else {
+		n := uint(0)
+		c := f.Call(ArbitraryVal{0}).Call(ArbitraryVal{1}).SimplifyFully()
+		for {
+			switch v := c.(type) {
+			case Called:
+				n++
+				c = v.Y
+			case ArbitraryVal:
+				return n
+			}
 		}
 	}
 }

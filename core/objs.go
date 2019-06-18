@@ -4,18 +4,18 @@ type Obj interface {
 	Call(Obj) Obj
 	Simplify() Obj
 	SimplifyFully() Obj
-	Replace(int, Obj) Obj
+	Replace(uint, Obj) Obj
 }
 
 // the last y in x->y->y
 type ReturnVal struct {
-	N int
+	N uint
 }
 
 func (f ReturnVal) Call(x Obj) Obj     { return Called{f, x} }
 func (f ReturnVal) Simplify() Obj      { return f }
 func (f ReturnVal) SimplifyFully() Obj { return f }
-func (f ReturnVal) Replace(n int, x Obj) Obj {
+func (f ReturnVal) Replace(n uint, x Obj) Obj {
 	switch n {
 	case f.N:
 		return x
@@ -26,14 +26,14 @@ func (f ReturnVal) Replace(n int, x Obj) Obj {
 
 // N -> x
 type Function struct {
-	N int
+	N uint
 	X Obj
 }
 
 func (f Function) Call(a Obj) Obj     { return f.X.Replace(f.N, a) }
 func (f Function) Simplify() Obj      { return Function{f.N, f.X.Simplify()} }
 func (f Function) SimplifyFully() Obj { return Function{f.N, f.X.SimplifyFully()} }
-func (f Function) Replace(n int, x Obj) Obj {
+func (f Function) Replace(n uint, x Obj) Obj {
 	switch f.N {
 	case n:
 		return f
@@ -58,34 +58,34 @@ func (f Called) SimplifyFully() Obj {
 	}
 	return v
 }
-func (f Called) Replace(n int, x Obj) Obj { return Called{f.X.Replace(n, x), f.Y.Replace(n, x)} }
+func (f Called) Replace(n uint, x Obj) Obj { return Called{f.X.Replace(n, x), f.Y.Replace(n, x)} }
 
 // a -> b -> a (a (a ...Num times... (a b))))
 type ChurchNum struct {
-	Num int
+	Num uint
 }
 
-func (f ChurchNum) Call(a Obj) Obj           { return CalledChurchNum{f.Num, a} } // TODO: if a is a ChurchNum, return ChurchNum{a.Num ^ f.num}
-func (f ChurchNum) Simplify() Obj            { return f }
-func (f ChurchNum) SimplifyFully() Obj       { return f }
-func (f ChurchNum) Replace(_ int, _ Obj) Obj { return f }
+func (f ChurchNum) Call(a Obj) Obj            { return CalledChurchNum{f.Num, a} } // TODO: if a is a ChurchNum, return ChurchNum{a.Num ^ f.num}
+func (f ChurchNum) Simplify() Obj             { return f }
+func (f ChurchNum) SimplifyFully() Obj        { return f }
+func (f ChurchNum) Replace(_ uint, _ Obj) Obj { return f }
 
 // a -> X (x (x ...Num times... (x a))))
 type CalledChurchNum struct {
-	Num int
+	Num uint
 	X   Obj
 }
 
 func (f CalledChurchNum) Call(a Obj) Obj {
 	return CalledCalledChurchNum{f.Num, f.X, a}
 }
-func (f CalledChurchNum) Simplify() Obj            { return f }
-func (f CalledChurchNum) SimplifyFully() Obj       { return f }
-func (f CalledChurchNum) Replace(_ int, _ Obj) Obj { return f }
+func (f CalledChurchNum) Simplify() Obj             { return f }
+func (f CalledChurchNum) SimplifyFully() Obj        { return f }
+func (f CalledChurchNum) Replace(n uint, x Obj) Obj { return CalledChurchNum{f.Num, f.X.Replace(n, x)} }
 
 // a -> (x (x (x ... Num times ... (x y)))) a
 type CalledCalledChurchNum struct {
-	Num int
+	Num uint
 	X   Obj
 	Y   Obj
 }
@@ -100,11 +100,11 @@ func (f CalledCalledChurchNum) Simplify() Obj {
 	}
 }
 func (f CalledCalledChurchNum) SimplifyFully() Obj {
-	for i := 0; i < f.Num; i++ {
+	for i := uint(0); i < f.Num; i++ {
 		f.Y = f.X.Call(f.Y)
 	}
 	return f.Y
 }
-func (f CalledCalledChurchNum) Replace(n int, x Obj) Obj {
+func (f CalledCalledChurchNum) Replace(n uint, x Obj) Obj {
 	return CalledCalledChurchNum{f.Num, f.X.Replace(n, x), f.Y.Replace(n, x)}
 }
