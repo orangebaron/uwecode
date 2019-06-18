@@ -1,139 +1,139 @@
 package core
 
-type obj interface {
-	call(obj) obj
-	simplify() obj
-	simplifyFully() obj
-	replace(int, obj) obj
+type Obj interface {
+	Call(Obj) Obj
+	Simplify() Obj
+	SimplifyFully() Obj
+	Replace(int, Obj) Obj
 }
 
 // the last y in x->y->y
-type returnVal struct {
-	n int
+type ReturnVal struct {
+	N int
 }
 
-func (f returnVal) call(x obj) obj     { return called{f, x} }
-func (f returnVal) simplify() obj      { return f }
-func (f returnVal) simplifyFully() obj { return f }
-func (f returnVal) replace(n int, x obj) obj {
+func (f ReturnVal) Call(x Obj) Obj     { return Called{f, x} }
+func (f ReturnVal) Simplify() Obj      { return f }
+func (f ReturnVal) SimplifyFully() Obj { return f }
+func (f ReturnVal) Replace(n int, x Obj) Obj {
 	switch n {
-	case f.n:
+	case f.N:
 		return x
 	default:
 		return f
 	}
 }
 
-// n -> x
-type function struct {
-	n int
-	x obj
+// N -> x
+type Function struct {
+	N int
+	X Obj
 }
 
-func (f function) call(a obj) obj     { return f.x.replace(f.n, a) }
-func (f function) simplify() obj      { return function{f.n, f.x.simplify()} }
-func (f function) simplifyFully() obj { return function{f.n, f.x.simplifyFully()} }
-func (f function) replace(n int, x obj) obj {
-	switch f.n {
+func (f Function) Call(a Obj) Obj     { return f.X.Replace(f.N, a) }
+func (f Function) Simplify() Obj      { return Function{f.N, f.X.Simplify()} }
+func (f Function) SimplifyFully() Obj { return Function{f.N, f.X.SimplifyFully()} }
+func (f Function) Replace(n int, x Obj) Obj {
+	switch f.N {
 	case n:
 		return f
 	default:
-		return function{f.n, f.x.replace(n, x)}
+		return Function{f.N, f.X.Replace(n, x)}
 	}
 }
 
 // a -> (x y) a
-type called struct {
-	x obj
-	y obj
+type Called struct {
+	X Obj
+	Y Obj
 }
 
-func (f called) call(a obj) obj { return called{f.x.call(f.y), a} }
-func (f called) simplify() obj  { return f.x.call(f.y) }
-func (f called) simplifyFully() obj {
-	switch f.x.(type) {
-	case returnVal:
-		return called{f.x, f.y.simplifyFully()}
-	case arbitraryVal:
-		return called{f.x, f.y.simplifyFully()}
+func (f Called) Call(a Obj) Obj { return Called{f.X.Call(f.Y), a} }
+func (f Called) Simplify() Obj  { return f.X.Call(f.Y) }
+func (f Called) SimplifyFully() Obj {
+	switch f.X.(type) {
+	case ReturnVal:
+		return Called{f.X, f.Y.SimplifyFully()}
+	case ArbitraryVal:
+		return Called{f.X, f.Y.SimplifyFully()}
 	default:
-		return f.x.call(f.y).simplifyFully()
+		return f.X.Call(f.Y).SimplifyFully()
 	}
 }
-func (f called) replace(n int, x obj) obj { return called{f.x.replace(n, x), f.y.replace(n, x)} }
+func (f Called) Replace(n int, x Obj) Obj { return Called{f.X.Replace(n, x), f.Y.Replace(n, x)} }
 
-// a -> b -> a (a (a ...num times... (a b))))
-type churchNum struct {
-	num int
+// a -> b -> a (a (a ...Num times... (a b))))
+type ChurchNum struct {
+	Num int
 }
 
-func (f churchNum) call(a obj) obj           { return calledChurchNum{f.num, a} } // TODO: if a is a churchNum, return churchNum{a.num ^ f.num}
-func (f churchNum) simplify() obj            { return f }
-func (f churchNum) simplifyFully() obj       { return f }
-func (f churchNum) replace(_ int, _ obj) obj { return f }
+func (f ChurchNum) Call(a Obj) Obj           { return CalledChurchNum{f.Num, a} } // TODO: if a is a ChurchNum, return ChurchNum{a.Num ^ f.num}
+func (f ChurchNum) Simplify() Obj            { return f }
+func (f ChurchNum) SimplifyFully() Obj       { return f }
+func (f ChurchNum) Replace(_ int, _ Obj) Obj { return f }
 
-// a -> x (x (x ...num times... (x a))))
-type calledChurchNum struct {
-	num int
-	x   obj
+// a -> X (x (x ...Num times... (x a))))
+type CalledChurchNum struct {
+	Num int
+	X   Obj
 }
 
-func (f calledChurchNum) call(a obj) obj {
-	return calledCalledChurchNum{f.num, f.x, a}
+func (f CalledChurchNum) Call(a Obj) Obj {
+	return CalledCalledChurchNum{f.Num, f.X, a}
 }
-func (f calledChurchNum) simplify() obj            { return f }
-func (f calledChurchNum) simplifyFully() obj       { return f }
-func (f calledChurchNum) replace(_ int, _ obj) obj { return f }
+func (f CalledChurchNum) Simplify() Obj            { return f }
+func (f CalledChurchNum) SimplifyFully() Obj       { return f }
+func (f CalledChurchNum) Replace(_ int, _ Obj) Obj { return f }
 
-// a -> (x (x (x ... num times ... (x y)))) a
-type calledCalledChurchNum struct {
-	num int
-	x   obj
-	y   obj
+// a -> (x (x (x ... Num times ... (x y)))) a
+type CalledCalledChurchNum struct {
+	Num int
+	X   Obj
+	Y   Obj
 }
 
-func (f calledCalledChurchNum) call(a obj) obj { return called{f.simplify(), a} }
-func (f calledCalledChurchNum) simplify() obj {
-	switch f.num {
+func (f CalledCalledChurchNum) Call(a Obj) Obj { return Called{f.Simplify(), a} }
+func (f CalledCalledChurchNum) Simplify() Obj {
+	switch f.Num {
 	case 0:
-		return f.y
+		return f.Y
 	default:
-		return calledCalledChurchNum{f.num - 1, f.x.call(f.y), f.y}
+		return CalledCalledChurchNum{f.Num - 1, f.X.Call(f.Y), f.Y}
 	}
 }
-func (f calledCalledChurchNum) simplifyFully() obj {
-	for i := 0; i < f.num; i++ {
-		f.y = f.x.call(f.y)
+func (f CalledCalledChurchNum) SimplifyFully() Obj {
+	for i := 0; i < f.Num; i++ {
+		f.Y = f.X.Call(f.Y)
 	}
-	return f.y
+	return f.Y
 }
-func (f calledCalledChurchNum) replace(n int, x obj) obj {
-	return calledCalledChurchNum{f.num, f.x.replace(n, x), f.y.replace(n, x)}
+func (f CalledCalledChurchNum) Replace(n int, x Obj) Obj {
+	return CalledCalledChurchNum{f.Num, f.X.Replace(n, x), f.Y.Replace(n, x)}
 }
 
-// n -> f -> x -> (n f) (f x) aka n -> n+1
-type incrFunction struct{}
+// N -> f -> X -> (n f) (f x) aka n -> n+1
+type IncrFunction struct{}
 
-var incrFunctionNormalForm = function{0, function{1, function{2, called{called{returnVal{0}, returnVal{1}}, called{returnVal{1}, returnVal{2}}}}}}
+var IncrFunctionNormalForm = Function{0, Function{1, Function{2, Called{Called{ReturnVal{0}, ReturnVal{1}}, Called{ReturnVal{1}, ReturnVal{2}}}}}}
 
-func (f incrFunction) call(a obj) obj {
+func (f IncrFunction) Call(a Obj) Obj {
 	switch at := a.(type) {
-	case churchNum:
-		return churchNum{at.num + 1}
+	case ChurchNum:
+		return ChurchNum{at.Num + 1}
 	default:
-		return incrFunctionNormalForm.call(a)
+		return IncrFunctionNormalForm.Call(a)
 	}
 }
-func (f incrFunction) simplify() obj            { return f }
-func (f incrFunction) simplifyFully() obj       { return f }
-func (f incrFunction) replace(n int, x obj) obj { return f }
+func (f IncrFunction) Simplify() Obj            { return f }
+func (f IncrFunction) SimplifyFully() Obj       { return f }
+func (f IncrFunction) Replace(n int, x Obj) Obj { return f }
 
 // arbitrary value identified by id
-type arbitraryVal struct {
+type ArbitraryVal struct {
 	id int
 }
 
-func (f arbitraryVal) call(x obj) obj           { return called{f, x} }
-func (f arbitraryVal) simplify() obj            { return f }
-func (f arbitraryVal) simplifyFully() obj       { return f }
-func (f arbitraryVal) replace(n int, x obj) obj { return f }
+func (f ArbitraryVal) Call(x Obj) Obj           { return Called{f, x} }
+func (f ArbitraryVal) Simplify() Obj            { return f }
+func (f ArbitraryVal) SimplifyFully() Obj       { return f }
+func (f ArbitraryVal) Replace(n int, x Obj) Obj { return f }
