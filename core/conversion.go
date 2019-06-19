@@ -2,7 +2,7 @@ package core
 
 // arbitrary value identified by id
 type ArbitraryVal struct {
-	id uint
+	ID uint
 }
 
 func (f ArbitraryVal) Call(x Obj) Obj            { return Called{f, x} }
@@ -32,11 +32,23 @@ func ObjToInt(f Obj) uint {
 
 func ObjToBool(f Obj) bool {
 	c := f.Call(ArbitraryVal{0}).Call(ArbitraryVal{1}).SimplifyFully()
-	return c.(ArbitraryVal).id == 0
+	return c.(ArbitraryVal).ID == 0
 }
 
 // assumes that the given Obj is actually a tuple
 func ObjToTuple(f Obj) (Obj, Obj) {
 	c := f.Call(ArbitraryVal{0}).SimplifyFully().(Called)
 	return c.X.(Called).Y, c.Y
+}
+
+func ObjToMaybe(f Obj) (bool, Obj) {
+	c := f.Call(ArbitraryVal{0}).Call(ArbitraryVal{1}).SimplifyFully()
+	called, isCalled := c.(Called)
+	return isCalled, called.Y
+}
+
+func ObjToEither(f Obj) (bool, Obj) {
+	c := f.Call(ArbitraryVal{0}).Call(ArbitraryVal{1}).SimplifyFully()
+	called := c.(Called)
+	return called.X.(ArbitraryVal).ID == 1, called.Y
 }
