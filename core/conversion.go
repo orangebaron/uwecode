@@ -41,6 +41,7 @@ func ObjToTuple(f Obj) (Obj, Obj) {
 	return c.X.(Called).Y, c.Y
 }
 
+// assumes that the given Obj is actually a maybe
 func ObjToMaybe(f Obj) (bool, Obj) {
 	c := f.Call(ArbitraryVal{0}).Call(ArbitraryVal{1}).SimplifyFully()
 	called, isCalled := c.(Called)
