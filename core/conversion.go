@@ -52,3 +52,22 @@ func ObjToEither(f Obj) (bool, Obj) {
 	called := c.(Called)
 	return called.X.(ArbitraryVal).ID == 1, called.Y
 }
+
+func splitTupleList(fs []Obj) ([]Obj) {
+	returnVal := make([]Obj, len(fs) * 2)
+	for i, f := range fs {
+		returnVal[i * 2], returnVal[i * 2 + 1] = ObjToTuple(f)
+	}
+	return returnVal
+}
+
+func ObjToByte(f Obj) (byte) {
+	bools := splitTupleList(splitTupleList(splitTupleList([]Obj{f})))
+	returnVal := byte(0)
+	for i, f := range bools {
+		if ObjToBool(f) {
+			returnVal = returnVal | (1 << uint(i))
+		}
+	}
+	return returnVal
+}
