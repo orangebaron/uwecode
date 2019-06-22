@@ -95,8 +95,13 @@ func ObjToString(f Obj) string {
 func ObjToIO(f Obj) IO {
 	isFork, val := ObjToEither(f)
 	if isFork {
-		objA, objB := ObjToTuple(val)
-		return ForkIO{objA, objB}
+		isFork, val2 := ObjToMaybe(val)
+		if isFork {
+			objA, objB := ObjToTuple(val2)
+			return ForkIO{objA, objB}
+		} else {
+			return NullIO{}
+		}
 	} else {
 		isOutput, val2 := ObjToEither(val)
 		if isOutput {

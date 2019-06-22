@@ -16,7 +16,7 @@ a,b: (a -> b -> x) -> x
 [a]: maybe (a,[a])
 byte: (((bool,bool),(bool,bool)),((bool,bool),(bool,bool)))
 str: [byte]
-IO: either (either (str -> IO) (str,IO)) (IO,IO)
+IO: either (either (str -> IO) (str,IO)) (Maybe (IO,IO))
 type: either number (type,type)
 ```
 will describe more later
