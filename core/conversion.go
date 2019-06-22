@@ -72,3 +72,13 @@ func ObjToByte(f Obj) (byte) {
 	}
 	return returnVal
 }
+
+func ObjToList(f Obj) ([]Obj) {
+	isSomething, val := ObjToMaybe(f)
+	if isSomething {
+		head, tail := ObjToTuple(val)
+		return append([]Obj{head}, ObjToList(tail)...)
+	} else {
+		return []Obj{}
+	}
+}
