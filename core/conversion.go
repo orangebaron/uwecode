@@ -83,11 +83,27 @@ func ObjToList(f Obj) []Obj {
 	}
 }
 
-func ObjToStr(f Obj) []byte {
+func ObjToString(f Obj) string {
 	list := ObjToList(f)
 	returnVal := make([]byte, len(list))
 	for i, v := range list {
 		returnVal[i] = ObjToByte(v)
 	}
-	return returnVal
+	return string(returnVal)
+}
+
+func ObjToIO(f Obj) IO {
+	isFork, val := ObjToEither(f)
+	if isFork {
+		objA, objB := ObjToTuple(val)
+		return ForkIO{objA, objB}
+	} else {
+		isOutput, val2 := ObjToEither(val)
+		if isOutput {
+			str, obj := ObjToTuple(val2)
+			return OutputIO{str, obj}
+		} else {
+			return InputIO{val2}
+		}
+	}
 }
