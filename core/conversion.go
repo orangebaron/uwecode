@@ -67,7 +67,7 @@ func ObjToByte(f Obj) byte {
 	returnVal := byte(0)
 	for i, f := range bools {
 		if ObjToBool(f) {
-			returnVal = returnVal | (1 << uint(i))
+			returnVal = returnVal | (1 << uint(7 - i))
 		}
 	}
 	return returnVal
@@ -81,4 +81,13 @@ func ObjToList(f Obj) []Obj {
 	} else {
 		return []Obj{}
 	}
+}
+
+func ObjToStr(f Obj) []byte {
+	list := ObjToList(f)
+	returnVal := make([]byte, len(list))
+	for i, v := range list {
+		returnVal[i] = ObjToByte(v)
+	}
+	return returnVal
 }
