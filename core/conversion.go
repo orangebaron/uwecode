@@ -67,7 +67,7 @@ func ObjToByte(f Obj) byte {
 	returnVal := byte(0)
 	for i, f := range bools {
 		if ObjToBool(f) {
-			returnVal = returnVal | (1 << uint(7 - i))
+			returnVal = returnVal | (1 << uint(7-i))
 		}
 	}
 	return returnVal
