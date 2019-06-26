@@ -3,12 +3,7 @@ package compiler
 type CharacterReader func(byte, interface{}, []Declaration) (interface{}, []Declaration, CharacterReader)
 
 func IsWhitespace(b byte) bool {
-	for _, c := range " \t\r\n" {
-		if c == b {
-			return true
-		}
-	}
-	return false
+	return contains(" \t\r\n", b)
 }
 
 type WhitespaceReaderState struct {
