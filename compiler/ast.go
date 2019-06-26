@@ -21,9 +21,15 @@ type FunctionExpression struct {
 }
 
 func (e FunctionExpression) ToObj(dict map[string]core.Obj, biggestNum uint) core.Obj {
+	oldVal, valWasPresent := dict[e.ArgName]
 	dict[e.ArgName] = core.ReturnVal{biggestNum}
-	// TODO immutably
-	return core.Function{biggestNum, e.Returned.ToObj(dict, biggestNum+1)}
+	returnVal := core.Function{biggestNum, e.Returned.ToObj(dict, biggestNum+1)}
+	if valWasPresent {
+		dict[e.ArgName] = oldVal
+	} else {
+		delete(dict, e.ArgName)
+	}
+	return returnVal
 }
 
 type NumExpression struct {
