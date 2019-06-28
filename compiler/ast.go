@@ -7,6 +7,7 @@ import "../core"
 type Expression interface {
 	ToObj(map[string]core.Obj, uint) core.Obj
 	AddWordToEnd(string) Expression
+	AddExpressionToEnd(Expression) Expression
 }
 
 func contains(l string, b byte) bool {
@@ -41,12 +42,17 @@ func WordToExpression(word string) Expression {
 }
 
 func DummyAddWordToEnd(e Expression, word string) Expression {
+	// TODO: if the word is the start of a function literal, things won't get appended to it afterwards; throw an error to tell the user not to do that?
 	exp := WordToExpression(word)
 	if IsInfixCall(word) {
 		return InfixCallExpression{exp, e, NullExpression{}}
 	} else {
 		return CallExpression{e, exp}
 	}
+}
+
+func DummyAddExpressionToEnd(e Expression, added Expression) Expression {
+	return CallExpression{e, added}
 }
 
 type CallExpression struct {
@@ -60,6 +66,10 @@ func (e CallExpression) ToObj(dict map[string]core.Obj, biggestNum uint) core.Ob
 
 func (e CallExpression) AddWordToEnd(word string) Expression {
 	return DummyAddWordToEnd(e, word)
+}
+
+func (e CallExpression) AddExpressionToEnd(added Expression) Expression {
+	return DummyAddExpressionToEnd(e, added)
 }
 
 type FunctionExpression struct {
@@ -83,6 +93,10 @@ func (e FunctionExpression) AddWordToEnd(word string) Expression {
 	return FunctionExpression{e.ArgName, e.Returned.AddWordToEnd(word)}
 }
 
+func (e FunctionExpression) AddExpressionToEnd(added Expression) Expression {
+	return FunctionExpression{e.ArgName, e.Returned.AddExpressionToEnd(added)}
+}
+
 type NumExpression struct {
 	Num uint
 }
@@ -95,12 +109,20 @@ func (e NumExpression) AddWordToEnd(word string) Expression {
 	return DummyAddWordToEnd(e, word)
 }
 
+func (e NumExpression) AddExpressionToEnd(added Expression) Expression {
+	return DummyAddExpressionToEnd(e, added)
+}
+
 type VarExpression struct {
 	Name string
 }
 
 func (e VarExpression) ToObj(dict map[string]core.Obj, _ uint) core.Obj {
 	return dict[e.Name]
+}
+
+func (e VarExpression) AddExpressionToEnd(added Expression) Expression {
+	return DummyAddExpressionToEnd(e, added)
 }
 
 func (e VarExpression) AddWordToEnd(word string) Expression {
@@ -121,6 +143,10 @@ func (e InfixCallExpression) AddWordToEnd(word string) Expression {
 	return InfixCallExpression{e.F, e.A, e.B.AddWordToEnd(word)}
 }
 
+func (e InfixCallExpression) AddExpressionToEnd(added Expression) Expression {
+	return InfixCallExpression{e.F, e.A, e.B.AddExpressionToEnd(added)}
+}
+
 type NullExpression struct{}
 
 func (e NullExpression) ToObj(_ map[string]core.Obj, _ uint) core.Obj {
@@ -129,6 +155,10 @@ func (e NullExpression) ToObj(_ map[string]core.Obj, _ uint) core.Obj {
 
 func (e NullExpression) AddWordToEnd(word string) Expression {
 	return WordToExpression(word)
+}
+
+func (e NullExpression) AddExpressionToEnd(added Expression) Expression {
+	return added
 }
 
 type ParenExpression struct {

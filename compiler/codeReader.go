@@ -1,6 +1,7 @@
 package compiler
 
-import "strings"
+import "io"
+import "../core"
 
 type CharacterReader func(byte, interface{}, []Declaration) (interface{}, []Declaration, CharacterReader)
 
@@ -52,7 +53,7 @@ func NormalReader(b byte, state interface{}, decls []Declaration) (interface{}, 
 	if IsWhitespace(b) {
 		if convertedState.CurrentWord == "=" {
 			convertedState.NormalDeclaration.Expression = convertedState.LastExpression
-			return WhitespaceReaderState{NormalReaderState{NullExpression{}, NullExpression{}, nil, "", "", NormalDeclaration{convertedState.LastWord, NullExpression{}}},NormalReader}, append(decls, convertedState.NormalDeclaration), WhitespaceReader
+			return WhitespaceReaderState{NormalReaderState{NullExpression{}, NullExpression{}, nil, "", "", NormalDeclaration{convertedState.LastWord, NullExpression{}}}, NormalReader}, append(decls, convertedState.NormalDeclaration), WhitespaceReader
 		} else {
 			if convertedState.InParentheses == nil {
 				convertedState.LastExpression = convertedState.Expression
@@ -61,7 +62,7 @@ func NormalReader(b byte, state interface{}, decls []Declaration) (interface{}, 
 				convertedState.CurrentWord = ""
 			} else {
 				newEnclosedWhiteState, _, _ := NormalReader(b, *convertedState.InParentheses, decls)
-newEnclosedNormState := newEnclosedWhiteState.(WhitespaceReaderState).State.(NormalReaderState)
+				newEnclosedNormState := newEnclosedWhiteState.(WhitespaceReaderState).State.(NormalReaderState)
 				convertedState.InParentheses = &newEnclosedNormState
 			}
 			return WhitespaceReaderState{convertedState, NormalReader}, decls, WhitespaceReader
@@ -82,18 +83,38 @@ newEnclosedNormState := newEnclosedWhiteState.(WhitespaceReaderState).State.(Nor
 			convertedState.Expression = convertedState.Expression.AddExpressionToEnd(ParenExpression{convertedState.InParentheses.Expression})
 		} else {
 			newEnclosedWhiteState, _, _ := NormalReader(b, *convertedState.InParentheses, decls)
-newEnclosedNormState := newEnclosedWhiteState.(WhitespaceReaderState).State.(NormalReaderState)
+			newEnclosedNormState := newEnclosedWhiteState.(WhitespaceReaderState).State.(NormalReaderState)
 			convertedState.InParentheses = &newEnclosedNormState
 		}
 		return WhitespaceReaderState{convertedState, NormalReader}, decls, WhitespaceReader
 	} else {
 		if convertedState.InParentheses == nil {
-			convertedState.CurrentWord = strings.Append(convertedState.CurrentWord, b)
+			convertedState.CurrentWord = convertedState.CurrentWord + string(b)
 		} else {
 			newEnclosedWhiteState, _, _ := NormalReader(b, *convertedState.InParentheses, decls)
-newEnclosedNormState := newEnclosedWhiteState.(WhitespaceReaderState).State.(NormalReaderState)
+			newEnclosedNormState := newEnclosedWhiteState.(WhitespaceReaderState).State.(NormalReaderState)
 			convertedState.InParentheses = &newEnclosedNormState
 		}
 		return convertedState, decls, NormalReader
+	}
+}
+
+const readLength = 20 // arbitrary
+func ReadCode(reader io.Reader, dict map[string]core.Obj) {
+	bytes := make([]byte, readLength)
+	var state interface{} = NormalReaderState{NumExpression{65},NumExpression{69},nil,"","asdf",NormalDeclaration{"mmm",NumExpression{72}}}
+	charReader := NormalReader
+	decls := []Declaration{}
+	for {
+		n, err := reader.Read(bytes)
+		if err != nil {
+			break
+		}
+		for i := 0; i < n; i++ {
+			state, decls, charReader = charReader(bytes[i], state, decls)
+		}
+	}
+	for _, decl := range decls {
+		decl.Apply(dict)
 	}
 }
