@@ -131,15 +131,27 @@ func (e NullExpression) AddWordToEnd(word string) Expression {
 	return WordToExpression(word)
 }
 
+type ParenExpression struct {
+	Expression
+}
+
+func (e ParenExpression) ToObj(dict map[string]core.Obj, biggestNum uint) core.Obj {
+	return e.Expression.ToObj(dict, biggestNum)
+}
+
+func (e ParenExpression) AddWordToEnd(word string) Expression {
+	return DummyAddWordToEnd(e, word)
+}
+
 type Declaration interface {
 	Apply(map[string]core.Obj)
 }
 
 type NormalDeclaration struct {
 	Name string
-	Expr Expression
+	Expression
 }
 
 func (d NormalDeclaration) Apply(dict map[string]core.Obj) {
-	dict[d.Name] = d.Expr.ToObj(dict, 0)
+	dict[d.Name] = d.Expression.ToObj(dict, 0)
 }
