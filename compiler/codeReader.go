@@ -1,6 +1,7 @@
 package compiler
 
 import "io"
+import "fmt"
 import "../core"
 
 type EOFFunction func(interface{}, []Declaration) []Declaration
@@ -75,6 +76,15 @@ func NormalEOFFunction(state interface{}, decls []Declaration) []Declaration {
 	return append(decls, convertedState.NormalDeclaration)
 }
 
+func NormalCallWithinParens(b byte, inParens NormalReaderState) *NormalReaderState {
+	state, _, _, _ := NormalReader(b, inParens, []Declaration{})
+	convertedState, isNormal := state.(NormalReaderState)
+	if !isNormal {
+		convertedState = state.(WhitespaceReaderState).State.(NormalReaderState)
+	}
+	return &convertedState
+}
+
 func NormalReader(b byte, state interface{}, decls []Declaration) (interface{}, []Declaration, CharacterReader, EOFFunction) {
 	convertedState := state.(NormalReaderState)
 	if IsWhitespace(b) {
@@ -92,39 +102,39 @@ func NormalReader(b byte, state interface{}, decls []Declaration) (interface{}, 
 				convertedState.LastWord = convertedState.CurrentWord
 				convertedState.CurrentWord = ""
 			} else {
-				newEnclosedWhiteState, _, _, _ := NormalReader(b, *convertedState.InParentheses, decls)
-				newEnclosedNormState := newEnclosedWhiteState.(WhitespaceReaderState).State.(NormalReaderState)
-				convertedState.InParentheses = &newEnclosedNormState
+				convertedState.InParentheses = NormalCallWithinParens(b, *convertedState.InParentheses)
 			}
 			return WhitespaceReaderState{convertedState, NormalReader, NormalEOFFunction}, decls, WhitespaceReader, NormalEOFFunction
 		}
 	} else if b == '(' {
 		// assuming that theres a space before open paren
 		// TODO: don't assume that
-		newEnclosedNormState := NormalReaderState{NullExpression{}, NullExpression{}, nil, "", "", NormalDeclaration{"", NullExpression{}}}
-		convertedState.InParentheses = &newEnclosedNormState
+		if convertedState.InParentheses == nil {
+			newEnclosedNormState := NormalReaderState{NullExpression{}, NullExpression{}, nil, "", "", NormalDeclaration{"", NullExpression{}}}
+			convertedState.InParentheses = &newEnclosedNormState
+		} else {
+			convertedState.InParentheses = NormalCallWithinParens(b, *convertedState.InParentheses)
+		}
 		return WhitespaceReaderState{convertedState, NormalReader, NormalEOFFunction}, decls, WhitespaceReader, ErrorEOFFunction
 	} else if b == ')' {
 		// assuming that there's a space before closing paren
 		// TODO: don't assume that
 		// also assuming that InParentheses != nil, ie something didnt go very badly wrong
 		// TODO: don't assume that either
+		fmt.Println(convertedState.InParentheses == nil)
 		if convertedState.InParentheses.InParentheses == nil {
 			convertedState.LastExpression = convertedState.Expression
 			convertedState.Expression = convertedState.Expression.AddExpressionToEnd(ParenExpression{convertedState.InParentheses.Expression})
+			convertedState.InParentheses = nil
 		} else {
-			newEnclosedWhiteState, _, _, _ := NormalReader(b, *convertedState.InParentheses, decls)
-			newEnclosedNormState := newEnclosedWhiteState.(WhitespaceReaderState).State.(NormalReaderState)
-			convertedState.InParentheses = &newEnclosedNormState
+			convertedState.InParentheses = NormalCallWithinParens(b, *convertedState.InParentheses)
 		}
 		return WhitespaceReaderState{convertedState, NormalReader, NormalEOFFunction}, decls, WhitespaceReader, NormalEOFFunction
 	} else {
 		if convertedState.InParentheses == nil {
 			convertedState.CurrentWord = convertedState.CurrentWord + string(b)
 		} else {
-			newEnclosedWhiteState, _, _, _ := NormalReader(b, *convertedState.InParentheses, decls)
-			newEnclosedNormState := newEnclosedWhiteState.(WhitespaceReaderState).State.(NormalReaderState)
-			convertedState.InParentheses = &newEnclosedNormState
+			convertedState.InParentheses = NormalCallWithinParens(b, *convertedState.InParentheses)
 		}
 		return convertedState, decls, NormalReader, NormalEOFFunction
 	}
