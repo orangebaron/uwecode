@@ -51,7 +51,7 @@ type Called struct {
 func (f Called) Call(a Obj) Obj { return Called{f.X.Call(f.Y), a} }
 func (f Called) Simplify() Obj  { return f.X.Call(f.Y) }
 func (f Called) SimplifyFully() Obj {
-	v := f.X.Call(f.Y.SimplifyFully())
+	v := f.X.SimplifyFully().Call(f.Y.SimplifyFully())
 	_, isCalled := v.(Called)
 	if !isCalled {
 		v = v.SimplifyFully()
