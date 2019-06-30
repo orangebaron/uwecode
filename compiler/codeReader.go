@@ -86,7 +86,7 @@ func NormalReader(b byte, state interface{}, decls []Declaration) (interface{}, 
 		}
 		return newState, decls, WhitespaceReader, ErrorEOFFunction
 	} else {
-		isSpecial := IsWhitespace(b) || b == '(' || b == ')'
+		isSpecial := IsWhitespace(b) || contains("()[", b)
 		if convertedState.InParentheses == nil {
 			if isSpecial && convertedState.CurrentWord != "" {
 				convertedState.LastExpression = convertedState.Expression
@@ -115,7 +115,9 @@ func NormalReader(b byte, state interface{}, decls []Declaration) (interface{}, 
 			}
 		}
 
-		if isSpecial {
+		if b == '[' {
+			return CommentReaderState{false, convertedState, NormalReader, NormalEOFFunction}, decls, CommentReader, ErrorEOFFunction
+		} else if isSpecial {
 			return WhitespaceReaderState{convertedState, NormalReader, NormalEOFFunction}, decls, WhitespaceReader, NormalEOFFunction
 		} else {
 			return convertedState, decls, NormalReader, NormalEOFFunction
