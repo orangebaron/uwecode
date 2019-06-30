@@ -75,15 +75,6 @@ func NormalEOFFunction(state interface{}, decls []Declaration) []Declaration {
 	return append(decls, convertedState.NormalDeclaration)
 }
 
-func NormalCallWithinParens(b byte, inParens NormalReaderState) *NormalReaderState {
-	state, _, _, _ := NormalReader(b, inParens, []Declaration{})
-	convertedState, isNormal := state.(NormalReaderState)
-	if !isNormal {
-		convertedState = state.(WhitespaceReaderState).State.(NormalReaderState)
-	}
-	return &convertedState
-}
-
 func NormalReader(b byte, state interface{}, decls []Declaration) (interface{}, []Declaration, CharacterReader, EOFFunction) {
 	convertedState := state.(NormalReaderState)
 	// TODO: check for errors: too many )s, = within paren, delaring something as nothing: "a = 2 b = c = 5"
@@ -111,7 +102,12 @@ func NormalReader(b byte, state interface{}, decls []Declaration) (interface{}, 
 				convertedState.InParentheses = &newEnclosedNormState
 			}
 		} else {
-			convertedState.InParentheses = NormalCallWithinParens(b, *convertedState.InParentheses)
+			stateEnclosed, _, _, _ := NormalReader(b, *convertedState.InParentheses, []Declaration{})
+			convertedStateEnclosed, isNormal := stateEnclosed.(NormalReaderState)
+			if !isNormal {
+				convertedStateEnclosed = stateEnclosed.(WhitespaceReaderState).State.(NormalReaderState)
+			}
+			convertedState.InParentheses = &convertedStateEnclosed
 			if b == ')' && convertedState.InParentheses.InParentheses == nil {
 				convertedState.LastExpression = convertedState.Expression
 				convertedState.Expression = convertedState.Expression.AddExpressionToEnd(ParenExpression{convertedState.InParentheses.Expression})
