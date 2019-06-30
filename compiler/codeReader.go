@@ -1,7 +1,6 @@
 package compiler
 
 import "io"
-import "fmt"
 import "../core"
 
 type EOFFunction func(interface{}, []Declaration) []Declaration
@@ -121,7 +120,6 @@ func NormalReader(b byte, state interface{}, decls []Declaration) (interface{}, 
 		// TODO: don't assume that
 		// also assuming that InParentheses != nil, ie something didnt go very badly wrong
 		// TODO: don't assume that either
-		fmt.Println(convertedState.InParentheses == nil)
 		if convertedState.InParentheses.InParentheses == nil {
 			convertedState.LastExpression = convertedState.Expression
 			convertedState.Expression = convertedState.Expression.AddExpressionToEnd(ParenExpression{convertedState.InParentheses.Expression})
