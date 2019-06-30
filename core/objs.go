@@ -16,10 +16,9 @@ func (f ReturnVal) Call(x Obj) Obj     { return Called{f, x} }
 func (f ReturnVal) Simplify() Obj      { return f }
 func (f ReturnVal) SimplifyFully() Obj { return f }
 func (f ReturnVal) Replace(n uint, x Obj) Obj {
-	switch n {
-	case f.N:
+	if n == f.N {
 		return x
-	default:
+	} else {
 		return f
 	}
 }
@@ -34,10 +33,9 @@ func (f Function) Call(a Obj) Obj     { return f.X.Replace(f.N, a) }
 func (f Function) Simplify() Obj      { return Function{f.N, f.X.Simplify()} }
 func (f Function) SimplifyFully() Obj { return Function{f.N, f.X.SimplifyFully()} }
 func (f Function) Replace(n uint, x Obj) Obj {
-	switch f.N {
-	case n:
+	if n == f.N {
 		return f
-	default:
+	} else {
 		return Function{f.N, f.X.Replace(n, x)}
 	}
 }
@@ -52,8 +50,7 @@ func (f Called) Call(a Obj) Obj { return Called{f.X.Call(f.Y), a} }
 func (f Called) Simplify() Obj  { return f.X.Call(f.Y) }
 func (f Called) SimplifyFully() Obj {
 	v := f.X.SimplifyFully().Call(f.Y.SimplifyFully())
-	_, isCalled := v.(Called)
-	if !isCalled {
+	if v != f {
 		v = v.SimplifyFully()
 	}
 	return v
