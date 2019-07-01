@@ -1,6 +1,7 @@
 package compiler
 
 import "strconv"
+import "os"
 import "../core"
 
 type DeclaredDict struct {
@@ -232,4 +233,35 @@ type NormalDeclaration struct {
 func (d NormalDeclaration) Apply(dict DeclaredDict) {
 	dict.AddObj(d.Name, d.Expression.ToObj(dict), d.Public)
 	dict.ClearWithinDeclInfo()
+}
+
+type ImportDeclaration struct {
+	Public bool	
+	Name string
+	ToImport []string
+	Aliases map[string]string
+}
+
+func (d ImportDeclaration) Apply(dict DeclaredDict) {
+	biggest := uint(0)
+	newDict := DeclaredDict{make(map[string]core.Obj), make(map[string]core.Obj), make(map[string]uint), &biggest}
+	f, _ := os.Open(d.Name)
+	ReadCode(f, newDict)
+	toImport := d.ToImport
+	if len(toImport) == 0 {
+		for k := range newDict.Public {
+			toImport = append(toImport, k)
+		}
+	}
+	for _, imp := range toImport {
+		if newDict.Public[imp] == nil {
+			panic("Tried to import "+imp+" from "+d.Name+", which doesn't exist")
+		}
+		name := d.Aliases[imp]
+		if name == "" {
+			name = imp
+		}
+		name = d.Aliases[""]+name
+		dict.AddObj(name, newDict.Public[imp], d.Public)
+	}
 }
