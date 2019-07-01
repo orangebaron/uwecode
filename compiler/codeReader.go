@@ -1,13 +1,16 @@
 package compiler
 
 import "io"
-import "../core"
 
 type EOFFunction func(interface{}, []Declaration) []Declaration
 type CharacterReader func(byte, interface{}, []Declaration) (interface{}, []Declaration, CharacterReader, EOFFunction)
 
 func IsWhitespace(b byte) bool {
 	return contains(" \t\r\n", b)
+}
+
+func IsDeclWord(word string) bool {
+	return word == "=" || word == "_="
 }
 
 func ErrorEOFFunction(_ interface{}, _ []Declaration) []Declaration {
@@ -78,9 +81,9 @@ func NormalEOFFunction(state interface{}, decls []Declaration) []Declaration {
 func NormalReader(b byte, state interface{}, decls []Declaration) (interface{}, []Declaration, CharacterReader, EOFFunction) {
 	convertedState := state.(NormalReaderState)
 	// TODO: check for errors: too many )s, = within paren, delaring something as nothing: "a = 2 b = c = 5"
-	if IsWhitespace(b) && convertedState.CurrentWord == "=" {
+	if IsWhitespace(b) && IsDeclWord(convertedState.CurrentWord) {
 		convertedState.NormalDeclaration.Expression = convertedState.LastExpression
-		newState := WhitespaceReaderState{NormalReaderState{NullExpression{}, NullExpression{}, nil, "", "", NormalDeclaration{convertedState.LastWord, NullExpression{}}}, NormalReader, NormalEOFFunction}
+		newState := WhitespaceReaderState{NormalReaderState{NullExpression{}, NullExpression{}, nil, "", "", NormalDeclaration{convertedState.LastWord, NullExpression{}, convertedState.CurrentWord != "_="}}, NormalReader, NormalEOFFunction}
 		if convertedState.NormalDeclaration.Name != "" {
 			decls = append(decls, convertedState.NormalDeclaration)
 		}
@@ -98,7 +101,7 @@ func NormalReader(b byte, state interface{}, decls []Declaration) (interface{}, 
 				convertedState.CurrentWord = convertedState.CurrentWord + string(b)
 			}
 			if b == '(' {
-				newEnclosedNormState := NormalReaderState{NullExpression{}, NullExpression{}, nil, "", "", NormalDeclaration{"", NullExpression{}}}
+				newEnclosedNormState := NormalReaderState{NullExpression{}, NullExpression{}, nil, "", "", NormalDeclaration{"", NullExpression{}, true}}
 				convertedState.InParentheses = &newEnclosedNormState
 			}
 		} else {
@@ -126,9 +129,9 @@ func NormalReader(b byte, state interface{}, decls []Declaration) (interface{}, 
 }
 
 const readLength = 20 // arbitrary
-func ReadCode(reader io.Reader, dict map[string]core.Obj) {
+func ReadCode(reader io.Reader, dict DeclaredDict) {
 	bytes := make([]byte, readLength)
-	var state interface{} = NormalReaderState{NullExpression{}, NullExpression{}, nil, "", "", NormalDeclaration{"", NumExpression{}}}
+	var state interface{} = NormalReaderState{NullExpression{}, NullExpression{}, nil, "", "", NormalDeclaration{"", NumExpression{}, true}}
 	charReader := NormalReader
 	decls := []Declaration{}
 	eofFunc := ErrorEOFFunction

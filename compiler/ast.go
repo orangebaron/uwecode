@@ -1,11 +1,62 @@
 package compiler
 
 import "strconv"
-
 import "../core"
 
+type DeclaredDict struct {
+	Public               map[string]core.Obj
+	Private              map[string]core.Obj
+	WithinDecl           map[string]uint
+	BiggestWithinDeclNum *uint
+}
+
+func (d DeclaredDict) AddObj(name string, obj core.Obj, public bool) {
+	_, alreadyPublic := d.Public[name]
+	_, alreadyPrivate := d.Private[name]
+	if alreadyPublic || alreadyPrivate {
+		panic("Declaration already exists")
+	}
+	addTo := d.Private
+	if public {
+		addTo = d.Public
+	}
+	addTo[name] = obj
+}
+func (d DeclaredDict) AddWithinDecl(name string) uint {
+	*d.BiggestWithinDeclNum++
+	old := d.WithinDecl[name]
+	d.WithinDecl[name] = *d.BiggestWithinDeclNum
+	return old
+}
+func (d DeclaredDict) RemoveWithinDecl(name string, old uint) {
+	*d.BiggestWithinDeclNum--
+	d.WithinDecl[name] = old
+}
+func (d DeclaredDict) ClearWithinDeclInfo() {
+	if *d.BiggestWithinDeclNum != 0 {
+		panic("BiggestWithinDeclNum ought to be 0")
+	}
+	for k, v := range d.WithinDecl {
+		if v != 0 {
+			panic("v ought to be 0")
+		}
+		delete(d.WithinDecl, k)
+	}
+}
+func (d DeclaredDict) GetObj(name string) core.Obj {
+	if d.Public[name] != nil {
+		return d.Public[name]
+	} else if d.Private[name] != nil {
+		return d.Private[name]
+	} else if d.WithinDecl[name] != 0 {
+		return core.ReturnVal{d.WithinDecl[name]}
+	} else {
+		panic(name + " does not exist")
+	}
+}
+
 type Expression interface {
-	ToObj(map[string]core.Obj, uint) core.Obj
+	ToObj(DeclaredDict) core.Obj
 	AddWordToEnd(string) Expression
 	AddExpressionToEnd(Expression) Expression
 }
@@ -60,8 +111,8 @@ type CallExpression struct {
 	X Expression
 }
 
-func (e CallExpression) ToObj(dict map[string]core.Obj, biggestNum uint) core.Obj {
-	return core.Called{e.F.ToObj(dict, biggestNum), e.X.ToObj(dict, biggestNum)}
+func (e CallExpression) ToObj(dict DeclaredDict) core.Obj {
+	return core.Called{e.F.ToObj(dict), e.X.ToObj(dict)}
 }
 
 func (e CallExpression) AddWordToEnd(word string) Expression {
@@ -77,15 +128,10 @@ type FunctionExpression struct {
 	Returned Expression
 }
 
-func (e FunctionExpression) ToObj(dict map[string]core.Obj, biggestNum uint) core.Obj {
-	oldVal, valWasPresent := dict[e.ArgName]
-	dict[e.ArgName] = core.ReturnVal{biggestNum}
-	returnVal := core.Function{biggestNum, e.Returned.ToObj(dict, biggestNum+1)}
-	if valWasPresent {
-		dict[e.ArgName] = oldVal
-	} else {
-		delete(dict, e.ArgName)
-	}
+func (e FunctionExpression) ToObj(dict DeclaredDict) core.Obj {
+	old := dict.AddWithinDecl(e.ArgName)
+	returnVal := core.Function{*dict.BiggestWithinDeclNum, e.Returned.ToObj(dict)}
+	dict.RemoveWithinDecl(e.ArgName, old)
 	return returnVal
 }
 
@@ -101,7 +147,7 @@ type NumExpression struct {
 	Num uint
 }
 
-func (e NumExpression) ToObj(_ map[string]core.Obj, _ uint) core.Obj {
+func (e NumExpression) ToObj(dict DeclaredDict) core.Obj {
 	return core.ChurchNum{e.Num}
 }
 
@@ -117,8 +163,8 @@ type VarExpression struct {
 	Name string
 }
 
-func (e VarExpression) ToObj(dict map[string]core.Obj, _ uint) core.Obj {
-	return dict[e.Name]
+func (e VarExpression) ToObj(dict DeclaredDict) core.Obj {
+	return dict.GetObj(e.Name)
 }
 
 func (e VarExpression) AddExpressionToEnd(added Expression) Expression {
@@ -135,8 +181,8 @@ type InfixCallExpression struct {
 	B Expression
 }
 
-func (e InfixCallExpression) ToObj(dict map[string]core.Obj, biggestNum uint) core.Obj {
-	return core.Called{core.Called{e.F.ToObj(dict, biggestNum), e.A.ToObj(dict, biggestNum)}, e.B.ToObj(dict, biggestNum)}
+func (e InfixCallExpression) ToObj(dict DeclaredDict) core.Obj {
+	return core.Called{core.Called{e.F.ToObj(dict), e.A.ToObj(dict)}, e.B.ToObj(dict)}
 }
 
 func (e InfixCallExpression) AddWordToEnd(word string) Expression {
@@ -149,7 +195,7 @@ func (e InfixCallExpression) AddExpressionToEnd(added Expression) Expression {
 
 type NullExpression struct{}
 
-func (e NullExpression) ToObj(_ map[string]core.Obj, _ uint) core.Obj {
+func (e NullExpression) ToObj(_ DeclaredDict) core.Obj {
 	panic("can't convert null expression to object")
 }
 
@@ -165,8 +211,8 @@ type ParenExpression struct {
 	Expression
 }
 
-func (e ParenExpression) ToObj(dict map[string]core.Obj, biggestNum uint) core.Obj {
-	return e.Expression.ToObj(dict, biggestNum)
+func (e ParenExpression) ToObj(dict DeclaredDict) core.Obj {
+	return e.Expression.ToObj(dict)
 }
 
 func (e ParenExpression) AddWordToEnd(word string) Expression {
@@ -174,14 +220,16 @@ func (e ParenExpression) AddWordToEnd(word string) Expression {
 }
 
 type Declaration interface {
-	Apply(map[string]core.Obj)
+	Apply(DeclaredDict)
 }
 
 type NormalDeclaration struct {
 	Name string
 	Expression
+	Public bool
 }
 
-func (d NormalDeclaration) Apply(dict map[string]core.Obj) {
-	dict[d.Name] = d.Expression.ToObj(dict, 0)
+func (d NormalDeclaration) Apply(dict DeclaredDict) {
+	dict.AddObj(d.Name, d.Expression.ToObj(dict), d.Public)
+	dict.ClearWithinDeclInfo()
 }
