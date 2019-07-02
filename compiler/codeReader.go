@@ -32,6 +32,106 @@ func WhitespaceReader(b byte, state interface{}, decls []Declaration) (interface
 	}
 }
 
+type ImportLoc int
+const (
+	ImportStart ImportLoc = iota
+	ImportAfterName
+	ImportAfterPrefixed
+	ImportAfterPrefixedName
+	ImportAfterJust
+	ImportAfterJustName
+	ImportAfterAs
+	ImportAfterAsName
+)
+
+type ImportReaderState struct {
+	LocInImport ImportLoc
+	Escaped bool
+	CurrentWord string
+	ImportDeclaration
+}
+
+func (s ImportReaderState) EndOfWord() ImportReaderState {
+	if s.CurrentWord != "" {
+		if s.LocInImport == ImportAfterAsName {
+			s.LocInImport = ImportAfterJust
+		}
+		switch s.LocInImport {
+		case ImportStart:
+			s.ImportDeclaration.Name = s.CurrentWord
+			s.LocInImport = ImportAfterName
+		case ImportAfterName:
+			switch s.CurrentWord {
+			case "public":
+				if s.ImportDeclaration.Public {
+					panic("said public twice in the same import")
+				} else {
+					s.ImportDeclaration.Public = true
+				}
+			case "prefixed":
+				s.LocInImport = ImportAfterPrefixed
+			case "just":
+				s.LocInImport = ImportAfterJust
+			default:
+				panic("expected \"public\", \"prefixed\", \"just\", or end of import")
+			}
+		case ImportAfterPrefixed:
+			s.ImportDeclaration.Aliases[""] = s.CurrentWord
+			s.LocInImport = ImportAfterPrefixedName
+		case ImportAfterPrefixedName:
+			if s.CurrentWord == "just" {
+				s.LocInImport = ImportAfterJust
+			} else {
+				panic("expected \"just\" or end of import")
+			}
+		case ImportAfterJust:
+			s.ImportDeclaration.ToImport = append(s.ImportDeclaration.ToImport, s.CurrentWord)
+			s.LocInImport = ImportAfterJustName
+		case ImportAfterJustName:
+			switch s.CurrentWord {
+			case "as":
+				s.LocInImport = ImportAfterAs
+			case "and":
+				s.LocInImport = ImportAfterJust
+			default:
+				panic("expected \"as\", \"and\", or end of import")
+			}
+		case ImportAfterAs:
+			s.ImportDeclaration.Aliases[s.ImportDeclaration.ToImport[len(s.ImportDeclaration.ToImport)-1]] = s.CurrentWord
+			s.LocInImport = ImportAfterAsName
+		default:
+			panic("unknown LocInImport")
+		}
+		s.CurrentWord = ""
+	}
+	return s
+}
+
+func (s ImportReaderState) ValidFinish() bool {
+	l := s.LocInImport
+	return l == ImportAfterName || l == ImportAfterPrefixedName || l == ImportAfterJustName || l == ImportAfterAsName
+}
+
+func ImportReader(b byte, state interface{}, decls []Declaration) (interface{}, []Declaration, CharacterReader, EOFFunction) {
+	convertedState := state.(ImportReaderState)
+	if IsWhitespace(b) {
+		return WhitespaceReaderState{convertedState.EndOfWord(), ImportReader, ErrorEOFFunction}, decls, WhitespaceReader, ErrorEOFFunction
+	} else if b == '\\' && !convertedState.Escaped {
+		convertedState.Escaped = true
+		return convertedState, decls, ImportReader, ErrorEOFFunction
+	} else if b == '}' && !convertedState.Escaped {
+		convertedState = convertedState.EndOfWord()
+		if !convertedState.ValidFinish() {
+			panic("unexpected end of import declaration")
+		}
+		decls = append(decls, convertedState.ImportDeclaration)
+		return NormalReaderState{NullExpression{}, NullExpression{}, nil, "", "", NormalDeclaration{"", NumExpression{}, true}}, decls, NormalReader, NormalEOFFunction
+	} else {
+		convertedState.CurrentWord = convertedState.CurrentWord + string(b)
+		return convertedState, decls, ImportReader, ErrorEOFFunction
+	}
+}
+
 type CommentReaderState struct {
 	Escaped bool
 	State   interface{}
@@ -40,7 +140,6 @@ type CommentReaderState struct {
 }
 
 func CommentReader(b byte, state interface{}, decls []Declaration) (interface{}, []Declaration, CharacterReader, EOFFunction) {
-	// TODO: tell when a comment starts
 	convertedState := state.(CommentReaderState)
 	if b == ']' && !convertedState.Escaped {
 		return convertedState.State, decls, convertedState.CharacterReader, convertedState.EOFFunction
@@ -75,7 +174,10 @@ func NormalEOFFunction(state interface{}, decls []Declaration) []Declaration {
 		convertedState.Expression = convertedState.Expression.AddWordToEnd(convertedState.CurrentWord)
 	}
 	convertedState.NormalDeclaration.Expression = convertedState.Expression
-	return append(decls, convertedState.NormalDeclaration)
+	if convertedState.NormalDeclaration.Name != "" {
+		decls = append(decls, convertedState.NormalDeclaration)
+	}
+	return decls
 }
 
 func NormalReader(b byte, state interface{}, decls []Declaration) (interface{}, []Declaration, CharacterReader, EOFFunction) {
@@ -88,6 +190,13 @@ func NormalReader(b byte, state interface{}, decls []Declaration) (interface{}, 
 			decls = append(decls, convertedState.NormalDeclaration)
 		}
 		return newState, decls, WhitespaceReader, ErrorEOFFunction
+	} else if b == '{' {
+		stateAfterSpace, _, _, _ := NormalReader(' ', state, decls)
+		decl := stateAfterSpace.(WhitespaceReaderState).State.(NormalReaderState).NormalDeclaration
+		if decl.Name != "" {
+			decls = append(decls, decl)
+		}
+		return ImportReaderState{ImportStart, false, "", ImportDeclaration{false, "", []string{}, make(map[string]string)}}, decls, ImportReader, ErrorEOFFunction
 	} else {
 		isSpecial := IsWhitespace(b) || contains("()[", b)
 		if convertedState.InParentheses == nil {

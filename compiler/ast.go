@@ -236,10 +236,10 @@ func (d NormalDeclaration) Apply(dict DeclaredDict) {
 }
 
 type ImportDeclaration struct {
-	Public bool	
-	Name string
+	Public   bool
+	Name     string
 	ToImport []string
-	Aliases map[string]string
+	Aliases  map[string]string
 }
 
 func (d ImportDeclaration) Apply(dict DeclaredDict) {
@@ -255,13 +255,13 @@ func (d ImportDeclaration) Apply(dict DeclaredDict) {
 	}
 	for _, imp := range toImport {
 		if newDict.Public[imp] == nil {
-			panic("Tried to import "+imp+" from "+d.Name+", which doesn't exist")
+			panic("Tried to import " + imp + " from " + d.Name + ", which doesn't exist")
 		}
 		name := d.Aliases[imp]
 		if name == "" {
 			name = imp
 		}
-		name = d.Aliases[""]+name
+		name = d.Aliases[""] + name
 		dict.AddObj(name, newDict.Public[imp], d.Public)
 	}
 }
