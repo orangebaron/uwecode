@@ -122,11 +122,21 @@ func (e CallExpression) ToObj(dict DeclaredDict) core.Obj {
 }
 
 func (e CallExpression) AddWordToEnd(word string) Expression {
-	return DummyAddWordToEnd(e, word)
+	_, isFunc := e.X.(FunctionExpression)
+	if isFunc {
+		return CallExpression{e.F, e.X.AddWordToEnd(word)}
+	} else {
+		return DummyAddWordToEnd(e, word)
+	}
 }
 
 func (e CallExpression) AddExpressionToEnd(added Expression) Expression {
-	return DummyAddExpressionToEnd(e, added)
+	_, isFunc := e.X.(FunctionExpression)
+	if isFunc {
+		return CallExpression{e.F, e.X.AddExpressionToEnd(added)}
+	} else {
+		return DummyAddExpressionToEnd(e, added)
+	}
 }
 
 type FunctionExpression struct {
