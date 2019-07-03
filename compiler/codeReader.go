@@ -33,6 +33,7 @@ func WhitespaceReader(b byte, state interface{}, decls []Declaration) (interface
 }
 
 type ImportLoc int
+
 const (
 	ImportStart ImportLoc = iota
 	ImportAfterName
@@ -46,7 +47,7 @@ const (
 
 type ImportReaderState struct {
 	LocInImport ImportLoc
-	Escaped bool
+	Escaped     bool
 	CurrentWord string
 	ImportDeclaration
 }
@@ -191,6 +192,7 @@ func NormalReader(b byte, state interface{}, decls []Declaration) (interface{}, 
 		}
 		return newState, decls, WhitespaceReader, ErrorEOFFunction
 	} else if b == '{' {
+		// TODO: do this more elegantly
 		stateAfterSpace, _, _, _ := NormalReader(' ', state, decls)
 		decl := stateAfterSpace.(WhitespaceReaderState).State.(NormalReaderState).NormalDeclaration
 		if decl.Name != "" {
