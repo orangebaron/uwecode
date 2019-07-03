@@ -1,4 +1,4 @@
-package compiler
+package reader
 
 import "strconv"
 import "os"
@@ -9,6 +9,11 @@ type DeclaredDict struct {
 	Private              map[string]core.Obj
 	WithinDecl           map[string]uint
 	BiggestWithinDeclNum *uint
+}
+
+func NewDeclaredDict() DeclaredDict {
+	biggest := uint(0)
+	return DeclaredDict{make(map[string]core.Obj), make(map[string]core.Obj), make(map[string]uint), &biggest}
 }
 
 func (d DeclaredDict) AddObj(name string, obj core.Obj, public bool) {
@@ -243,8 +248,7 @@ type ImportDeclaration struct {
 }
 
 func (d ImportDeclaration) Apply(dict DeclaredDict) {
-	biggest := uint(0)
-	newDict := DeclaredDict{make(map[string]core.Obj), make(map[string]core.Obj), make(map[string]uint), &biggest}
+	newDict := NewDeclaredDict()
 	f, _ := os.Open(d.Name)
 	ReadCode(f, newDict)
 	toImport := d.ToImport
