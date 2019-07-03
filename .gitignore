@@ -1,4 +1,3 @@
-*.hi
-*.o
 test.go
 test.uwe
+test

@@ -191,16 +191,8 @@ func NormalReader(b byte, state interface{}, decls []Declaration) (interface{}, 
 			decls = append(decls, convertedState.NormalDeclaration)
 		}
 		return newState, decls, WhitespaceReader, ErrorEOFFunction
-	} else if b == '{' {
-		// TODO: do this more elegantly
-		stateAfterSpace, _, _, _ := NormalReader(' ', state, decls)
-		decl := stateAfterSpace.(WhitespaceReaderState).State.(NormalReaderState).NormalDeclaration
-		if decl.Name != "" {
-			decls = append(decls, decl)
-		}
-		return ImportReaderState{ImportStart, false, "", ImportDeclaration{false, "", []string{}, make(map[string]string)}}, decls, ImportReader, ErrorEOFFunction
 	} else {
-		isSpecial := IsWhitespace(b) || contains("()[", b)
+		isSpecial := IsWhitespace(b) || contains("()[{", b)
 		if convertedState.InParentheses == nil {
 			if isSpecial && convertedState.CurrentWord != "" {
 				convertedState.LastExpression = convertedState.Expression
@@ -231,6 +223,11 @@ func NormalReader(b byte, state interface{}, decls []Declaration) (interface{}, 
 
 		if b == '[' {
 			return CommentReaderState{false, convertedState, NormalReader, NormalEOFFunction}, decls, CommentReader, ErrorEOFFunction
+		} else if b == '{' {
+			if convertedState.NormalDeclaration.Name != "" {
+				decls = append(decls, convertedState.NormalDeclaration)
+			}
+			return ImportReaderState{ImportStart, false, "", ImportDeclaration{false, "", []string{}, make(map[string]string)}}, decls, ImportReader, ErrorEOFFunction
 		} else if isSpecial {
 			return WhitespaceReaderState{convertedState, NormalReader, NormalEOFFunction}, decls, WhitespaceReader, NormalEOFFunction
 		} else {
