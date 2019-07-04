@@ -5,7 +5,7 @@ combine-then = \a \b \c \d b `id a c d
 const = \a \b a
 reverse = \a \b b a
 self-call = \a a a
-recursive = \a selfcall \b a `id b b
+recursive = \a self-call \b a `id b b
 [bool]
 true = const
 false = 0
@@ -16,27 +16,27 @@ either-call = \a \b b a a
 [maybe]
 just = left
 none = 0
-maybe-call = rev `combine-then rev 0
+maybe-call = reverse `combine-then reverse 0
 [tuple]
 ,tup = \a \b \c c a b
 head-tup = true
 tail-tup = false
 [list]
-,list = tup `combine-then just
+,list = ,tup `combine-then just
 head-list = maybe-call head-tup
 tail-list = maybe-call tail-tup
-@list = \a \b head `id b tail a
-reduce-list = recursive \self \f \base \list list (\head,tail self f (f base `id fst head,tail) `id snd head,tail) base
+@list = \a \b head-list `id b tail-list a
+[reduce-list = recursive \self \f \base \list list (\head,tail self f (f base `id head-tup head,tail) `id tail-tup head,tail) base
 filter-list = \f reduce-list (\l \elem (f elem) (l `,list elem) l) 0
 map-list = \f reduce-list (\l \elem l `,list (f elem)) 0
-+list = reduce-list ,list
++list = reduce-list ,list]
 [num]
 ++num = \a \b b `then a b
-+num = rev ++num
-*num = \a rev (+num a) `then rev 0
-^num = rev
++num = reverse ++num
+*num = \a reverse (+num a) `then reverse 0
+^num = reverse
 --num = \a \b \c a (\d \e e `id d b) (const c) id [copied from wikipedia lol, dont ask me]
--num = rev --num
+-num = reverse --num
 [TODO more num things]
 [io]
 inp = left `then left

@@ -33,6 +33,22 @@ func WhitespaceReader(b byte, state interface{}, decls []Declaration) (interface
 	}
 }
 
+type StringLiteralReaderState struct {
+	NormalReaderState
+	CurrentStr string
+	IsSingleChar bool
+}
+
+func StringLiteralReader(b byte, state interface{}, decls []Declaration) (interface{}, []Declaration, CharacterReader, EOFFunction) {
+	convertedState := state.(StringLiteralReaderState)
+	if ((b == '"' && !convertedState.IsSingleChar) || (b == '\'' && convertedState.IsSingleChar)) && (len(convertedState.CurrentStr) == 0 || (len(convertedState.CurrentStr) == 1 && convertedState.CurrentStr[0] != '\\') || (len(convertedState.CurrentStr) > 1 && (convertedState.CurrentStr[len(convertedState.CurrentStr)-1] != '\\' || convertedState.CurrentStr[len(convertedState.CurrentStr)-2] == '\\'))) {
+		return convertedState.NormalReaderState.AddStringLiteralToEnd(convertedState.CurrentStr, convertedState.IsSingleChar, decls)
+	} else {
+		convertedState.CurrentStr += string(b)
+		return convertedState, decls, StringLiteralReader, ErrorEOFFunction
+	}
+}
+
 type ImportLoc int
 
 const (
@@ -127,7 +143,7 @@ func ImportReader(b byte, state interface{}, decls []Declaration) (interface{}, 
 			panic("unexpected end of import declaration")
 		}
 		decls = append(decls, convertedState.ImportDeclaration)
-		return NormalReaderState{NullExpression{}, NullExpression{}, nil, "", "", NormalDeclaration{"", NumExpression{}, true}}, decls, NormalReader, NormalEOFFunction
+		return NormalReaderState{NullExpression{}, NullExpression{}, nil, "", "", NormalDeclaration{"", NullExpression{}, true}}, decls, NormalReader, NormalEOFFunction
 	} else {
 		convertedState.CurrentWord = convertedState.CurrentWord + string(b)
 		return convertedState, decls, ImportReader, ErrorEOFFunction
@@ -163,6 +179,20 @@ type NormalReaderState struct {
 	NormalDeclaration                    // relevant only on non-paren-enclosed level
 }
 
+func (s NormalReaderState) AddStringLiteralToEnd(str string, isSingleChar bool, decls []Declaration) (NormalReaderState, []Declaration, CharacterReader, EOFFunction) {
+	if s.InParentheses != nil {
+		newState, _, _, _ := s.InParentheses.AddStringLiteralToEnd(str, isSingleChar, decls)
+		s.InParentheses = &newState
+	} else if isSingleChar {
+		s.LastExpression = s.Expression
+		s.Expression = s.Expression.AddExpressionToEnd(CharLiteralExpression{str[0]}) // TODO parse n error n stuff
+	} else {
+		s.LastExpression = s.Expression
+		s.Expression = s.Expression.AddExpressionToEnd(StringLiteralExpression{str}) // TODO parse
+	}
+	return s, decls, NormalReader, NormalEOFFunction
+}
+
 func NormalEOFFunction(state interface{}, decls []Declaration) []Declaration {
 	convertedState, isAlreadyNormal := state.(NormalReaderState)
 	if !isAlreadyNormal {
@@ -193,7 +223,7 @@ func NormalReader(b byte, state interface{}, decls []Declaration) (interface{}, 
 		}
 		return newState, decls, WhitespaceReader, ErrorEOFFunction
 	} else {
-		isSpecial := IsWhitespace(b) || contains("()[{", b)
+		isSpecial := IsWhitespace(b) || contains("()[{\"'", b)
 		if convertedState.InParentheses == nil {
 			if isSpecial && convertedState.CurrentWord != "" {
 				convertedState.LastExpression = convertedState.Expression
@@ -229,6 +259,8 @@ func NormalReader(b byte, state interface{}, decls []Declaration) (interface{}, 
 				decls = append(decls, convertedState.NormalDeclaration)
 			}
 			return ImportReaderState{ImportStart, false, "", ImportDeclaration{false, "", []string{}, make(map[string]string)}}, decls, ImportReader, ErrorEOFFunction
+		} else if contains("\"'", b) {
+			return StringLiteralReaderState{convertedState, "", b == '\''}, decls, StringLiteralReader, ErrorEOFFunction
 		} else if isSpecial {
 			return WhitespaceReaderState{convertedState, NormalReader, NormalEOFFunction}, decls, WhitespaceReader, NormalEOFFunction
 		} else {
@@ -259,7 +291,7 @@ func (e EvalError) Error() string {
 const readLength = 20 // arbitrary
 func ReadCode(reader io.Reader, dict DeclaredDict) (err error) {
 	bytes := make([]byte, readLength)
-	var state interface{} = NormalReaderState{NullExpression{}, NullExpression{}, nil, "", "", NormalDeclaration{"", NumExpression{}, true}}
+	var state interface{} = NormalReaderState{NullExpression{}, NullExpression{}, nil, "", "", NormalDeclaration{"", NullExpression{}, true}}
 	charReader := NormalReader
 	decls := []Declaration{}
 	eofFunc := ErrorEOFFunction
@@ -268,7 +300,7 @@ func ReadCode(reader io.Reader, dict DeclaredDict) (err error) {
 	defer func() {
 		if r := recover(); r != nil {
 			if charNumber == -1 {
-				err = EvalError{decls[0].(NormalDeclaration), r.(string)}
+				err = EvalError{decls[0], r.(string)}
 			} else {
 				err = SyntaxError{lineNumber, charNumber, r.(string)}
 			}

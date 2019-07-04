@@ -87,8 +87,8 @@ func IsInfixCall(word string) bool {
 
 func WordToExpression(word string) Expression {
 	n, err := strconv.Atoi(word)
-	if err == nil && n > 0 { // what about numbers that're too big?
-		return NumExpression{uint(n)}
+	if err == nil && n >= 0 { // what about numbers that're too big?
+		return NumLiteralExpression{uint(n)}
 	} else if isFirstCharacter(word, '\\') {
 		return FunctionExpression{word[1:], NullExpression{}}
 	} else if IsInfixCall(word) {
@@ -159,19 +159,51 @@ func (e FunctionExpression) AddExpressionToEnd(added Expression) Expression {
 	return FunctionExpression{e.ArgName, e.Returned.AddExpressionToEnd(added)}
 }
 
-type NumExpression struct {
+type NumLiteralExpression struct {
 	Num uint
 }
 
-func (e NumExpression) ToObj(dict DeclaredDict) core.Obj {
+func (e NumLiteralExpression) ToObj(dict DeclaredDict) core.Obj {
 	return core.ChurchNum{e.Num}
 }
 
-func (e NumExpression) AddWordToEnd(word string) Expression {
+func (e NumLiteralExpression) AddWordToEnd(word string) Expression {
 	return DummyAddWordToEnd(e, word)
 }
 
-func (e NumExpression) AddExpressionToEnd(added Expression) Expression {
+func (e NumLiteralExpression) AddExpressionToEnd(added Expression) Expression {
+	return DummyAddExpressionToEnd(e, added)
+}
+
+type CharLiteralExpression struct {
+	Char byte
+}
+
+func (e CharLiteralExpression) ToObj(dict DeclaredDict) core.Obj {
+	return core.ChurchNum{uint(e.Char)} //TODO
+}
+
+func (e CharLiteralExpression) AddWordToEnd(word string) Expression {
+	return DummyAddWordToEnd(e, word)
+}
+
+func (e CharLiteralExpression) AddExpressionToEnd(added Expression) Expression {
+	return DummyAddExpressionToEnd(e, added)
+}
+
+type StringLiteralExpression struct {
+	Str string
+}
+
+func (e StringLiteralExpression) ToObj(dict DeclaredDict) core.Obj {
+	return core.ChurchNum{uint(e.Str[0])} //TODO
+}
+
+func (e StringLiteralExpression) AddWordToEnd(word string) Expression {
+	return DummyAddWordToEnd(e, word)
+}
+
+func (e StringLiteralExpression) AddExpressionToEnd(added Expression) Expression {
 	return DummyAddExpressionToEnd(e, added)
 }
 
