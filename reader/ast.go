@@ -237,6 +237,7 @@ func (e ParenExpression) AddWordToEnd(word string) Expression {
 
 type Declaration interface {
 	Apply(DeclaredDict)
+	Summary() string
 }
 
 type NormalDeclaration struct {
@@ -250,6 +251,14 @@ func (d NormalDeclaration) Apply(dict DeclaredDict) {
 	dict.ClearWithinDeclInfo()
 }
 
+func (d NormalDeclaration) Summary() string {
+	eqString := "_="
+	if d.Public {
+		eqString = "="
+	}
+	return d.Name + " " + eqString + " ..."
+}
+
 type ImportDeclaration struct {
 	Public   bool
 	Name     string
@@ -259,8 +268,14 @@ type ImportDeclaration struct {
 
 func (d ImportDeclaration) Apply(dict DeclaredDict) {
 	newDict := NewDeclaredDict()
-	f, _ := os.Open(d.Name)
-	ReadCode(f, newDict)
+	f, err := os.Open(d.Name)
+	if err != nil {
+		panic(err.Error())
+	}
+	err = ReadCode(f, newDict)
+	if err != nil {
+		panic(err.Error())
+	}
 	toImport := d.ToImport
 	if len(toImport) == 0 {
 		for k := range newDict.Public {
@@ -278,4 +293,8 @@ func (d ImportDeclaration) Apply(dict DeclaredDict) {
 		name = d.Aliases[""] + name
 		dict.AddObj(name, newDict.Public[imp], d.Public)
 	}
+}
+
+func (d ImportDeclaration) Summary() string {
+	return "{" + d.Name + " ..."
 }

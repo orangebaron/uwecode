@@ -1,6 +1,7 @@
 package reader
 
 import "io"
+import "fmt"
 
 type EOFFunction func(interface{}, []Declaration) []Declaration
 type CharacterReader func(byte, interface{}, []Declaration) (interface{}, []Declaration, CharacterReader, EOFFunction)
@@ -236,13 +237,43 @@ func NormalReader(b byte, state interface{}, decls []Declaration) (interface{}, 
 	}
 }
 
+type SyntaxError struct {
+	LineNum int
+	CharNum int
+	Err     string
+}
+
+func (e SyntaxError) Error() string {
+	return fmt.Sprintf("Syntax error: line %d character %d: %s", e.LineNum, e.CharNum, e.Err)
+}
+
+type EvalError struct {
+	Declaration
+	Err string
+}
+
+func (e EvalError) Error() string {
+	return fmt.Sprintf("Evaluation error: %s: %s", e.Declaration.Summary(), e.Err)
+}
+
 const readLength = 20 // arbitrary
-func ReadCode(reader io.Reader, dict DeclaredDict) {
+func ReadCode(reader io.Reader, dict DeclaredDict) (err error) {
 	bytes := make([]byte, readLength)
 	var state interface{} = NormalReaderState{NullExpression{}, NullExpression{}, nil, "", "", NormalDeclaration{"", NumExpression{}, true}}
 	charReader := NormalReader
 	decls := []Declaration{}
 	eofFunc := ErrorEOFFunction
+	charNumber := 1
+	lineNumber := 1
+	defer func() {
+		if r := recover(); r != nil {
+			if charNumber == -1 {
+				err = EvalError{decls[0].(NormalDeclaration), r.(string)}
+			} else {
+				err = SyntaxError{lineNumber, charNumber, r.(string)}
+			}
+		}
+	}()
 	for {
 		n, err := reader.Read(bytes)
 		if err != nil {
@@ -250,10 +281,18 @@ func ReadCode(reader io.Reader, dict DeclaredDict) {
 		}
 		for i := 0; i < n; i++ {
 			state, decls, charReader, eofFunc = charReader(bytes[i], state, decls)
+			charNumber++
+			if bytes[i] == '\n' {
+				lineNumber++
+				charNumber = 1
+			}
 		}
 	}
 	decls = eofFunc(state, decls)
-	for _, decl := range decls {
-		decl.Apply(dict)
+	charNumber = -1
+	for len(decls) > 0 {
+		decls[0].Apply(dict)
+		decls = decls[1:]
 	}
+	return nil
 }
