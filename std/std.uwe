@@ -26,10 +26,10 @@ tail-tup = false
 head-list = maybe-call head-tup
 tail-list = maybe-call tail-tup
 @list = \a \b head-list `id b tail-list a
-[reduce-list = recursive \self \f \base \list list (\head,tail self f (f base `id head-tup head,tail) `id tail-tup head,tail) base
+reduce-list = recursive \self \f \base \list list (\head,tail self f (f base `id head-tup head,tail) `id tail-tup head,tail) base
 filter-list = \f reduce-list (\l \elem (f elem) (l `,list elem) l) 0
 map-list = \f reduce-list (\l \elem l `,list (f elem)) 0
-+list = reduce-list ,list]
++list = reduce-list ,list
 [num]
 ++num = \a \b b `then a b
 +num = reverse ++num

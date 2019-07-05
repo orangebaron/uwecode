@@ -283,13 +283,14 @@ func NormalReader(b byte, state interface{}, decls []Declaration) (interface{}, 
 				convertedState.InParentheses = &newEnclosedNormState
 			}
 		} else {
+			isSecondToInner := convertedState.InParentheses.InParentheses == nil
 			stateEnclosed, _, _, _ := NormalReader(b, *convertedState.InParentheses, []Declaration{})
 			convertedStateEnclosed, isNormal := stateEnclosed.(NormalReaderState)
 			if !isNormal {
 				convertedStateEnclosed = stateEnclosed.(WhitespaceReaderState).State.(NormalReaderState)
 			}
 			convertedState.InParentheses = &convertedStateEnclosed
-			if b == ')' && convertedState.InParentheses.InParentheses == nil {
+			if b == ')' && isSecondToInner {
 				convertedState.LastExpression = convertedState.Expression
 				convertedState.Expression = convertedState.Expression.AddExpressionToEnd(ParenExpression{convertedState.InParentheses.Expression})
 				convertedState.InParentheses = nil
@@ -300,6 +301,7 @@ func NormalReader(b byte, state interface{}, decls []Declaration) (interface{}, 
 			return CommentReaderState{false, convertedState, NormalReader, NormalEOFFunction}, decls, CommentReader, ErrorEOFFunction
 		} else if b == '{' {
 			if convertedState.NormalDeclaration.Name != "" {
+				convertedState.NormalDeclaration.Expression = convertedState.Expression
 				decls = append(decls, convertedState.NormalDeclaration)
 			}
 			return ImportReaderState{ImportStart, false, "", ImportDeclaration{false, "", []string{}, make(map[string]string)}}, decls, ImportReader, ErrorEOFFunction
