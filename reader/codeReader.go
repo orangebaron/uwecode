@@ -187,7 +187,7 @@ func ImportReader(b byte, state interface{}, decls []Declaration) (interface{}, 
 			panic("unexpected end of import declaration")
 		}
 		decls = append(decls, convertedState.ImportDeclaration)
-		return NormalReaderState{NullExpression{}, NullExpression{}, nil, "", "", nil}, decls, NormalReader, NormalEOFFunction
+		return NormalReaderState{NullExpression{}, NullExpression{}, nil, "", "", nil, false}, decls, NormalReader, NormalEOFFunction
 	} else {
 		convertedState.CurrentWord = convertedState.CurrentWord + string(b)
 		return convertedState, decls, ImportReader, ErrorEOFFunction
@@ -216,11 +216,12 @@ func CommentReader(b byte, state interface{}, decls []Declaration) (interface{},
 
 type NormalReaderState struct {
 	Expression
-	LastExpression    Expression
-	InParentheses     *NormalReaderState // if in parentheses
-	CurrentWord       string             // if not in parentheses
-	LastWord          string             // only for making new declarations, relevant only on non-paren-enclosed level
-	Declaration                    // relevant only on non-paren-enclosed level
+	LastExpression Expression
+	InParentheses  *NormalReaderState // if in parentheses
+	CurrentWord    string             // if not in parentheses
+	LastWord       string             // only for making new declarations, relevant only on non-paren-enclosed level
+	Declaration                       // relevant only on non-paren-enclosed level
+	ParenEnclosed  bool               // am i paren enclosed?
 }
 
 func (s NormalReaderState) AddStringLiteralToEnd(str string, isSingleChar bool, decls []Declaration) (NormalReaderState, []Declaration, CharacterReader, EOFFunction) {
@@ -229,10 +230,13 @@ func (s NormalReaderState) AddStringLiteralToEnd(str string, isSingleChar bool, 
 		s.InParentheses = &newState
 	} else if isSingleChar {
 		s.LastExpression = s.Expression
-		s.Expression = s.Expression.AddExpressionToEnd(CharLiteralExpression{str[0]}) // TODO parse n error n stuff
+		if len(str) != 1 {
+			panic("Character literal is wrong length")
+		}
+		s.Expression = s.Expression.AddExpressionToEnd(CharLiteralExpression{str[0]})
 	} else {
 		s.LastExpression = s.Expression
-		s.Expression = s.Expression.AddExpressionToEnd(StringLiteralExpression{str}) // TODO parse
+		s.Expression = s.Expression.AddExpressionToEnd(StringLiteralExpression{str})
 	}
 	return s, decls, NormalReader, NormalEOFFunction
 }
@@ -261,11 +265,10 @@ func NormalEOFFunction(state interface{}, decls []Declaration) []Declaration {
 	if convertedState.CurrentWord != "" {
 		convertedState.Expression = convertedState.Expression.AddWordToEnd(convertedState.CurrentWord)
 	}
-	convertedState = convertedState.SetDeclExpression(convertedState.LastExpression)
+	convertedState = convertedState.SetDeclExpression(convertedState.Expression)
 	if convertedState.Declaration != nil {
 		decls = append(decls, convertedState.Declaration)
 	}
-	fmt.Printf("%#v\n", decls)
 	return decls
 }
 
@@ -273,11 +276,14 @@ func NormalReader(b byte, state interface{}, decls []Declaration) (interface{}, 
 	convertedState := state.(NormalReaderState)
 	// TODO: check for errors: too many )s, = within paren, delaring something as nothing: "a = 2 b = c = 5"
 	if IsWhitespace(b) && IsDeclWord(convertedState.CurrentWord) {
+		if convertedState.ParenEnclosed {
+			panic("Can't start a declaration within parentheses")
+		}
 		var newDecl Declaration = NormalDeclaration{convertedState.LastWord, NullExpression{}, convertedState.CurrentWord != "_="}
 		if convertedState.CurrentWord == ":" {
 			newDecl = TypeDeclaration{convertedState.LastWord, NullExpression{}}
 		}
-		newState := WhitespaceReaderState{NormalReaderState{NullExpression{}, NullExpression{}, nil, "", "", newDecl}, NormalReader, NormalEOFFunction}
+		newState := WhitespaceReaderState{NormalReaderState{NullExpression{}, NullExpression{}, nil, "", "", newDecl, false}, NormalReader, NormalEOFFunction}
 		if convertedState.Declaration != nil {
 			convertedState = convertedState.SetDeclExpression(convertedState.LastExpression)
 			decls = append(decls, convertedState.Declaration)
@@ -296,9 +302,10 @@ func NormalReader(b byte, state interface{}, decls []Declaration) (interface{}, 
 				convertedState.CurrentWord = convertedState.CurrentWord + string(b)
 			}
 			if b == '(' {
-				newEnclosedNormState := NormalReaderState{NullExpression{}, NullExpression{}, nil, "", "", nil}
+				newEnclosedNormState := NormalReaderState{NullExpression{}, NullExpression{}, nil, "", "", nil, true}
 				convertedState.InParentheses = &newEnclosedNormState
-				fmt.Printf("mmmmm %#v\n",convertedState)
+			} else if b == ')' && !convertedState.ParenEnclosed {
+				panic("Used ')' without matching '(' beforehand")
 			}
 		} else {
 			isSecondToInner := convertedState.InParentheses.InParentheses == nil
@@ -312,7 +319,6 @@ func NormalReader(b byte, state interface{}, decls []Declaration) (interface{}, 
 				convertedState.LastExpression = convertedState.Expression
 				convertedState.Expression = convertedState.Expression.AddExpressionToEnd(ParenExpression{convertedState.InParentheses.Expression})
 				convertedState.InParentheses = nil
-				fmt.Printf("%#v\n", convertedState)
 			}
 		}
 
@@ -320,7 +326,7 @@ func NormalReader(b byte, state interface{}, decls []Declaration) (interface{}, 
 			return CommentReaderState{false, convertedState, NormalReader, NormalEOFFunction}, decls, CommentReader, ErrorEOFFunction
 		} else if b == '{' {
 			if convertedState.Declaration != nil {
-				convertedState = convertedState.SetDeclExpression(convertedState.LastExpression)
+				convertedState = convertedState.SetDeclExpression(convertedState.Expression)
 				decls = append(decls, convertedState.Declaration)
 			}
 			return ImportReaderState{ImportStart, false, "", ImportDeclaration{false, "", []string{}, make(map[string]string)}}, decls, ImportReader, ErrorEOFFunction
@@ -356,7 +362,7 @@ func (e EvalError) Error() string {
 const readLength = 20 // arbitrary
 func ReadCode(reader io.Reader, dict DeclaredDict) (err error) {
 	bytes := make([]byte, readLength)
-	var state interface{} = NormalReaderState{NullExpression{}, NullExpression{}, nil, "", "", nil}
+	var state interface{} = NormalReaderState{NullExpression{}, NullExpression{}, nil, "", "", nil, false}
 	charReader := NormalReader
 	decls := []Declaration{}
 	eofFunc := ErrorEOFFunction
