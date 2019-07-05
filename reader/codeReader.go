@@ -2,6 +2,7 @@ package reader
 
 import "io"
 import "fmt"
+import "encoding/hex"
 
 type EOFFunction func(interface{}, []Declaration) []Declaration
 type CharacterReader func(byte, interface{}, []Declaration) (interface{}, []Declaration, CharacterReader, EOFFunction)
@@ -33,18 +34,61 @@ func WhitespaceReader(b byte, state interface{}, decls []Declaration) (interface
 	}
 }
 
+type EscapedCharLocation int
+
+const (
+	Unescaped EscapedCharLocation = iota
+	Escaped
+	HexFirstChar
+	HexSecondChar
+)
+
 type StringLiteralReaderState struct {
 	NormalReaderState
-	CurrentStr string
+	CurrentStr   string
 	IsSingleChar bool
+	EscapedCharLocation
+	CurrentHexChar byte
 }
 
 func StringLiteralReader(b byte, state interface{}, decls []Declaration) (interface{}, []Declaration, CharacterReader, EOFFunction) {
 	convertedState := state.(StringLiteralReaderState)
-	if ((b == '"' && !convertedState.IsSingleChar) || (b == '\'' && convertedState.IsSingleChar)) && (len(convertedState.CurrentStr) == 0 || (len(convertedState.CurrentStr) == 1 && convertedState.CurrentStr[0] != '\\') || (len(convertedState.CurrentStr) > 1 && (convertedState.CurrentStr[len(convertedState.CurrentStr)-1] != '\\' || convertedState.CurrentStr[len(convertedState.CurrentStr)-2] == '\\'))) {
+	if ((b == '"' && !convertedState.IsSingleChar) || (b == '\'' && convertedState.IsSingleChar)) && convertedState.EscapedCharLocation == Unescaped {
 		return convertedState.NormalReaderState.AddStringLiteralToEnd(convertedState.CurrentStr, convertedState.IsSingleChar, decls)
 	} else {
-		convertedState.CurrentStr += string(b)
+		switch convertedState.EscapedCharLocation {
+		case Unescaped:
+			if b == '\\' {
+				convertedState.EscapedCharLocation = Escaped
+			} else {
+				convertedState.CurrentStr += string(b)
+			}
+		case Escaped:
+			convertedState.EscapedCharLocation = Unescaped
+			switch b {
+			case 'n':
+				convertedState.CurrentStr += "\n"
+			case 'r':
+				convertedState.CurrentStr += "\r"
+			case 't':
+				convertedState.CurrentStr += "\t"
+			case 'x':
+				convertedState.EscapedCharLocation = HexFirstChar
+			default:
+				convertedState.CurrentStr += string(b)
+			}
+		case HexFirstChar:
+			convertedState.EscapedCharLocation = HexSecondChar
+			convertedState.CurrentHexChar = b
+		case HexSecondChar:
+			dst := make([]byte, 1)
+			_, err := hex.Decode(dst, []byte{convertedState.CurrentHexChar, b})
+			if err != nil {
+				panic(err)
+			}
+			convertedState.CurrentStr += string(dst[0])
+			convertedState.EscapedCharLocation = Unescaped
+		}
 		return convertedState, decls, StringLiteralReader, ErrorEOFFunction
 	}
 }
@@ -260,7 +304,7 @@ func NormalReader(b byte, state interface{}, decls []Declaration) (interface{}, 
 			}
 			return ImportReaderState{ImportStart, false, "", ImportDeclaration{false, "", []string{}, make(map[string]string)}}, decls, ImportReader, ErrorEOFFunction
 		} else if contains("\"'", b) {
-			return StringLiteralReaderState{convertedState, "", b == '\''}, decls, StringLiteralReader, ErrorEOFFunction
+			return StringLiteralReaderState{convertedState, "", b == '\'', Unescaped, byte(0)}, decls, StringLiteralReader, ErrorEOFFunction
 		} else if isSpecial {
 			return WhitespaceReaderState{convertedState, NormalReader, NormalEOFFunction}, decls, WhitespaceReader, NormalEOFFunction
 		} else {
@@ -299,10 +343,14 @@ func ReadCode(reader io.Reader, dict DeclaredDict) (err error) {
 	lineNumber := 1
 	defer func() {
 		if r := recover(); r != nil {
+			s, isString := r.(string)
+			if !isString {
+				s = r.(error).Error()
+			}
 			if charNumber == -1 {
-				err = EvalError{decls[0], r.(string)}
+				err = EvalError{decls[0], s}
 			} else {
-				err = SyntaxError{lineNumber, charNumber, r.(string)}
+				err = SyntaxError{lineNumber, charNumber, s}
 			}
 		}
 	}()

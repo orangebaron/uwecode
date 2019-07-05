@@ -302,11 +302,11 @@ func (d ImportDeclaration) Apply(dict DeclaredDict) {
 	newDict := NewDeclaredDict()
 	f, err := os.Open(d.Name)
 	if err != nil {
-		panic(err.Error())
+		panic(err)
 	}
 	err = ReadCode(f, newDict)
 	if err != nil {
-		panic(err.Error())
+		panic(err)
 	}
 	toImport := d.ToImport
 	if len(toImport) == 0 {
