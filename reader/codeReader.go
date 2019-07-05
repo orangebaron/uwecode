@@ -274,7 +274,6 @@ func NormalEOFFunction(state interface{}, decls []Declaration) []Declaration {
 
 func NormalReader(b byte, state interface{}, decls []Declaration) (interface{}, []Declaration, CharacterReader, EOFFunction) {
 	convertedState := state.(NormalReaderState)
-	// TODO: check for errors: too many )s, = within paren, delaring something as nothing: "a = 2 b = c = 5"
 	if IsWhitespace(b) && IsDeclWord(convertedState.CurrentWord) {
 		if convertedState.ParenEnclosed {
 			panic("Can't start a declaration within parentheses")
