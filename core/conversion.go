@@ -13,6 +13,26 @@ func (f ArbitraryVal) GetUnboundVars(_ map[uint]bool, _ map[uint]bool) {}
 func (f ArbitraryVal) GetAllVars(_ map[uint]bool)                      {}
 func (f ArbitraryVal) ReplaceBindings(_ map[uint]bool) Obj             { return f }
 
+// arbitrary method: only accepts Inp as input, returns Otp if given Inp
+type ArbitraryMethod struct {
+	Inp Obj
+	Otp Obj
+}
+
+func (f ArbitraryMethod) Call(x Obj) Obj {
+	if x.SimplifyFully() == f.Inp {
+		return f.Otp
+	} else {
+		return Called{f, x}
+	}
+}
+func (f ArbitraryMethod) Simplify() Obj                                   { return f }
+func (f ArbitraryMethod) SimplifyFully() Obj                              { return f }
+func (f ArbitraryMethod) Replace(n uint, x Obj) Obj                       { return f }
+func (f ArbitraryMethod) GetUnboundVars(_ map[uint]bool, _ map[uint]bool) {}
+func (f ArbitraryMethod) GetAllVars(_ map[uint]bool)                      {}
+func (f ArbitraryMethod) ReplaceBindings(_ map[uint]bool) Obj             { return f }
+
 // assumes that the given Obj is actually a number
 func ObjToInt(f Obj) uint {
 	cn, isChurchNum := f.(ChurchNum)
@@ -123,5 +143,15 @@ func ObjToIO(f Obj) IO {
 		} else {
 			return InputIO{val2}
 		}
+	}
+}
+
+func ObjToType(f Obj) Type {
+	isTup, val := ObjToEither(f)
+	if isTup {
+		a, b := ObjToTuple(val)
+		return ArbitraryMethod{TBDType{a}, TBDType{b}}
+	} else {
+		return ArbitraryVal{ObjToInt(val)}
 	}
 }
