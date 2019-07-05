@@ -5,14 +5,15 @@ type Type interface {
 	ToExampleObj() Obj
 }
 
-func (t ArbiraryVal) MatchesType(a Obj, _ uint) bool { return a.SimplifyFully() == t }
+func (t ArbitraryVal) MatchesType(a Obj, _ uint) bool { return a.SimplifyFully() == t }
 func (t ArbitraryVal) ToExampleObj() Obj { return t }
 
 func (t ArbitraryMethod) MatchesType(a Obj, itersLeft uint) bool {
 	if itersLeft == 0 {
 		return true
 	} else {
-		return t.Otp.MatchesType(a.Call(t.Inp.ToExampleObj()), itersLeft - 1)
+inp, otp := ObjToType(t.Inp), ObjToType(t.Otp)
+return otp.MatchesType(a.Call(inp.ToExampleObj()), itersLeft - 1)
 	}
 }
 func (t ArbitraryMethod) ToExampleObj() Obj { return t }

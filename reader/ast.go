@@ -267,6 +267,10 @@ func (e ParenExpression) AddWordToEnd(word string) Expression {
 	return DummyAddWordToEnd(e, word)
 }
 
+func (e ParenExpression) AddExpressionToEnd(added Expression) Expression {
+	return DummyAddExpressionToEnd(e, added)
+}
+
 type Declaration interface {
 	Apply(DeclaredDict)
 	Summary() string
@@ -329,4 +333,19 @@ func (d ImportDeclaration) Apply(dict DeclaredDict) {
 
 func (d ImportDeclaration) Summary() string {
 	return "{" + d.Name + " ..."
+}
+
+type TypeDeclaration struct {
+	Name string
+	Expression
+}
+
+func (d TypeDeclaration) Apply(dict DeclaredDict) {
+	if !core.ObjToType(d.Expression.ToObj(dict)).MatchesType(dict.GetObj(d.Name), 1000) {
+		panic("Type does not match")
+	}
+}
+
+func (d TypeDeclaration) Summary() string {
+	return d.Name + " : ..."
 }

@@ -1,5 +1,7 @@
 package core
 
+import "fmt"
+
 type Controller interface {
 	GiveInput(string) Obj
 	TakeOutput(string, Obj)
@@ -48,6 +50,7 @@ func (_ NullIO) run(_ Controller, _ string) (Obj, bool) {
 }
 
 func RunProcess(f Obj, controller Controller, closeWhenInitted chan struct{}) {
+	fmt.Println(f)
 	pid := controller.InitNewProcess()
 	close(closeWhenInitted)
 	for keepGoing := true; keepGoing; f, keepGoing = ObjToIO(f).run(controller, pid) {
