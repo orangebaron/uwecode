@@ -3,6 +3,8 @@ package std
 import "../core"
 import "fmt"
 import "sync"
+import "bufio"
+import "os"
 
 type ExampleController struct {
 	n  *byte
@@ -10,10 +12,15 @@ type ExampleController struct {
 }
 
 func (c ExampleController) GiveInput(pid string) core.Obj {
-	return core.ChurchNum{uint(pid[0])}
+	reader := bufio.NewReader(os.Stdin)
+	text, err := reader.ReadString('\n')
+	if err != nil {
+		panic(err)
+	}
+	return core.ChurchTupleCharString{text}
 }
 func (c ExampleController) TakeOutput(pid string, otp core.Obj) {
-	fmt.Println(core.ObjToString(otp))
+	fmt.Print(core.ObjToString(otp))
 }
 func (c ExampleController) InitNewProcess() string {
 	*c.n++
