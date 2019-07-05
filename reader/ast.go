@@ -180,7 +180,7 @@ type CharLiteralExpression struct {
 }
 
 func (e CharLiteralExpression) ToObj(dict DeclaredDict) core.Obj {
-	return core.ChurchNum{uint(e.Char)} //TODO
+	return core.ChurchTupleChar{e.Char}
 }
 
 func (e CharLiteralExpression) AddWordToEnd(word string) Expression {
@@ -196,7 +196,7 @@ type StringLiteralExpression struct {
 }
 
 func (e StringLiteralExpression) ToObj(dict DeclaredDict) core.Obj {
-	return core.ChurchNum{uint(e.Str[0])} //TODO
+	return core.ChurchTupleCharString{e.Str}
 }
 
 func (e StringLiteralExpression) AddWordToEnd(word string) Expression {

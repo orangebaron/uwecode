@@ -66,14 +66,19 @@ func splitTupleList(fs []Obj) []Obj {
 }
 
 func ObjToByte(f Obj) byte {
-	bools := splitTupleList(splitTupleList(splitTupleList([]Obj{f})))
-	returnVal := byte(0)
-	for i, f := range bools {
-		if ObjToBool(f) {
-			returnVal = returnVal | (1 << uint(7-i))
+	churchChar, isChurchChar := f.(ChurchTupleChar)
+	if isChurchChar {
+		return churchChar.Char
+	} else {
+		bools := splitTupleList(splitTupleList(splitTupleList([]Obj{f})))
+		returnVal := byte(0)
+		for i, f := range bools {
+			if ObjToBool(f) {
+				returnVal = returnVal | (1 << uint(7-i))
+			}
 		}
+		return returnVal
 	}
-	return returnVal
 }
 
 func ObjToList(f Obj) []Obj {
@@ -87,12 +92,17 @@ func ObjToList(f Obj) []Obj {
 }
 
 func ObjToString(f Obj) string {
-	list := ObjToList(f)
-	returnVal := make([]byte, len(list))
-	for i, v := range list {
-		returnVal[i] = ObjToByte(v)
+	churchString, isChurchString := f.(ChurchTupleCharString)
+	if isChurchString {
+		return churchString.Str
+	} else {
+		list := ObjToList(f)
+		returnVal := make([]byte, len(list))
+		for i, v := range list {
+			returnVal[i] = ObjToByte(v)
+		}
+		return string(returnVal)
 	}
-	return string(returnVal)
 }
 
 func ObjToIO(f Obj) IO {

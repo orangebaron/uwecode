@@ -13,8 +13,7 @@ func (c ExampleController) GiveInput(pid string) core.Obj {
 	return core.ChurchNum{uint(pid[0])}
 }
 func (c ExampleController) TakeOutput(pid string, otp core.Obj) {
-	fmt.Println(uint(pid[0]))
-	fmt.Println(otp)
+	fmt.Println(core.ObjToString(otp))
 }
 func (c ExampleController) InitNewProcess() string {
 	*c.n++

@@ -179,3 +179,54 @@ func (f CalledCalledChurchNum) GetAllVars(vars map[uint]bool) {
 func (f CalledCalledChurchNum) ReplaceBindings(toReplace map[uint]bool) Obj {
 	return CalledCalledChurchNum{f.Num, f.X.ReplaceBindings(toReplace), f.Y.ReplaceBindings(toReplace)}
 }
+
+type ChurchTupleChar struct {
+	Char byte
+}
+
+var falseObj Obj = Function{0, Function{1, ReturnVal{1}}}
+var trueObj Obj = Function{0, Function{1, ReturnVal{0}}}
+
+func tuple(a Obj, b Obj) Obj {
+	return Function{0, Called{Called{ReturnVal{0}, a}, b}}
+}
+func (f ChurchTupleChar) ToNormalObj() Obj {
+	bools := make([]Obj, 8)
+	for i := uint(0); i < 8; i++ {
+		if (f.Char>>i)&byte(1) == 0 {
+			bools[7-i] = falseObj
+		} else {
+			bools[7-i] = trueObj
+		}
+	}
+	return tuple(tuple(tuple(bools[0], bools[1]), tuple(bools[2], bools[3])), tuple(tuple(bools[4], bools[5]), tuple(bools[6], bools[7])))
+}
+func (f ChurchTupleChar) Call(a Obj) Obj                                  { return Called{f.ToNormalObj(), a} }
+func (f ChurchTupleChar) Simplify() Obj                                   { return f }
+func (f ChurchTupleChar) SimplifyFully() Obj                              { return f }
+func (f ChurchTupleChar) Replace(_ uint, _ Obj) Obj                       { return f }
+func (f ChurchTupleChar) GetUnboundVars(_ map[uint]bool, _ map[uint]bool) {}
+func (f ChurchTupleChar) GetAllVars(_ map[uint]bool)                      {}
+func (f ChurchTupleChar) ReplaceBindings(_ map[uint]bool) Obj             { return f }
+
+type ChurchTupleCharString struct {
+	Str string
+}
+
+func just(a Obj) Obj {
+	return Function{0, Function{1, Called{ReturnVal{0}, a}}}
+}
+func (f ChurchTupleCharString) ToNormalObj() Obj {
+	if len(f.Str) == 0 {
+		return falseObj
+	} else {
+		return just(tuple(ChurchTupleChar{f.Str[0]}, ChurchTupleCharString{f.Str[1:]}))
+	}
+}
+func (f ChurchTupleCharString) Call(a Obj) Obj                                  { return Called{f.ToNormalObj(), a} }
+func (f ChurchTupleCharString) Simplify() Obj                                   { return f }
+func (f ChurchTupleCharString) SimplifyFully() Obj                              { return f }
+func (f ChurchTupleCharString) Replace(_ uint, _ Obj) Obj                       { return f }
+func (f ChurchTupleCharString) GetUnboundVars(_ map[uint]bool, _ map[uint]bool) {}
+func (f ChurchTupleCharString) GetAllVars(_ map[uint]bool)                      {}
+func (f ChurchTupleCharString) ReplaceBindings(_ map[uint]bool) Obj             { return f }
