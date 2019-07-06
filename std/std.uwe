@@ -3,12 +3,21 @@ id = \a a
 then = \a \b \c b `id a c
 combine-then = \a \b \c \d b `id a c d
 const = \a \b a
-reverse = \a \b b a
+rev = \a \b b a
+revrev = \a \b rev a `then rev b
 self-call = \a a a
 recursive = \a self-call \b a `id b b
 [bool]
 true = const
 false = 0
+and = \a \b a b a
+or = \a \b a a b
+not = revrev false true
+nand = and `combine-then not
+nor = or `combine-then not
+xor = \a \b or a b `and nand a b
+xnor = xor `combine-then not
+tostring-bool = revrev "true" "false"
 [either]
 left = \a \b const `id b a
 right = \a \b \c c a
@@ -16,7 +25,7 @@ either-call = \a \b b a a
 [maybe]
 just = left
 none = 0
-maybe-call = reverse `combine-then reverse 0
+maybe-call = rev `combine-then rev 0
 [tuple]
 ,tup = \a \b \c c a b
 head-tup = true
@@ -32,11 +41,18 @@ map-list = \f reduce-list (\l \elem l `,list (f elem)) 0
 +list = reduce-list ,list
 [num]
 ++num = \a \b b `then a b
-+num = reverse ++num
-*num = \a reverse (+num a) `then reverse 0
-^num = reverse
---num = \a \b \c a (\d \e e `id d b) (const c) id [copied from wikipedia lol, dont ask me]
--num = reverse --num
++num = rev ++num
+*num = \a +num a `revrev 0
+^num = rev
+shift-incr-tup _= tail-tup `then \a a `,tup ++num a
+--num = revrev shift-incr-tup (0 `,tup 0) `then head-tup
+-num = rev --num
+=0 = const false `revrev true
+<=num = -num `combine-then =0
+>num = <=num `combine-then not
+=num = \a \b <=num a b `and <=num b a
+>=num = \a \b =num a b `or >num a b
+<num = >=num `combine-then not
 [TODO more num things]
 [io]
 inp = left `then left

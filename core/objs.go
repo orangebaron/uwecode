@@ -114,7 +114,7 @@ type ChurchNum struct {
 	Num uint
 }
 
-func (f ChurchNum) Call(a Obj) Obj                                  { return CalledChurchNum{f.Num, a} } // TODO: if a is a ChurchNum, return ChurchNum{a.Num ^ f.num}
+func (f ChurchNum) Call(a Obj) Obj                                  { return CalledChurchNum{f.Num, a} }
 func (f ChurchNum) Simplify() Obj                                   { return f }
 func (f ChurchNum) SimplifyFully() Obj                              { return f }
 func (f ChurchNum) Replace(_ uint, _ Obj) Obj                       { return f }
@@ -156,14 +156,14 @@ func (f CalledCalledChurchNum) Simplify() Obj {
 	if f.Num == 0 {
 		return f.Y
 	} else {
-		return CalledCalledChurchNum{f.Num - 1, f.X.Call(f.Y), f.Y}
+		return CalledCalledChurchNum{f.Num - 1, f.X, f.X.Call(f.Y)}
 	}
 }
 func (f CalledCalledChurchNum) SimplifyFully() Obj {
 	for i := uint(0); i < f.Num; i++ {
 		f.Y = f.X.Call(f.Y)
 	}
-	return f.Y
+	return f.Y.SimplifyFully()
 }
 func (f CalledCalledChurchNum) Replace(n uint, x Obj) Obj {
 	return CalledCalledChurchNum{f.Num, f.X.Replace(n, x), f.Y.Replace(n, x)}

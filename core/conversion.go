@@ -33,7 +33,6 @@ func (f ArbitraryMethod) GetUnboundVars(_ map[uint]bool, _ map[uint]bool) {}
 func (f ArbitraryMethod) GetAllVars(_ map[uint]bool)                      {}
 func (f ArbitraryMethod) ReplaceBindings(_ map[uint]bool) Obj             { return f }
 
-// assumes that the given Obj is actually a number
 func ObjToInt(f Obj) uint {
 	cn, isChurchNum := f.(ChurchNum)
 	if isChurchNum {
@@ -42,11 +41,17 @@ func ObjToInt(f Obj) uint {
 		n := uint(0)
 		c := f.Call(ArbitraryVal{0}).Call(ArbitraryVal{1}).SimplifyFully()
 		for {
-			switch v := c.(type) {
-			case Called:
+			called, isCalled := c.(Called)
+			if isCalled {
 				n++
-				c = v.Y
-			case ArbitraryVal:
+				c = called.Y
+				if called.X.(ArbitraryVal).ID != 0 {
+					panic("Expected ArbitraryVal{0}")
+				}
+			} else {
+				if c.(ArbitraryVal).ID != 1 {
+					panic("ExpectedArbitraryVal{1}")
+				}
 				return n
 			}
 		}
