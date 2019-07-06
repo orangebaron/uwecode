@@ -28,8 +28,8 @@ none = 0
 maybe-call = rev `combine-then rev 0
 [tuple]
 ,tup = \a \b \c c a b
-head-tup = true
-tail-tup = false
+head-tup = rev true
+tail-tup = rev false
 [list]
 ,list = ,tup `combine-then just
 head-list = maybe-call head-tup
@@ -46,7 +46,7 @@ map-list = \f reduce-list (\l \elem l `,list (f elem)) 0
 ^num = rev
 shift-incr-tup _= tail-tup `then \a a `,tup ++num a
 --num = revrev shift-incr-tup (0 `,tup 0) `then head-tup
--num = rev --num
+-num = revrev --num
 =0 = const false `revrev true
 <=num = -num `combine-then =0
 >num = <=num `combine-then not
