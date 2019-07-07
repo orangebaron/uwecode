@@ -5,8 +5,12 @@ type Type interface {
 	ToExampleObj() Obj
 }
 
-func (t ArbitraryVal) MatchesType(a Obj, _ uint) bool { return a.SimplifyFully() == t }
-func (t ArbitraryVal) ToExampleObj() Obj              { return t }
+func (t ArbitraryVal) MatchesType(a Obj, _ uint) (returned bool) {
+	defer recover()
+	SimplifyUntil(func(f Obj) (bool, interface{}) { return f == t, nil }, a)
+	return true
+}
+func (t ArbitraryVal) ToExampleObj() Obj { return t }
 
 func (t ArbitraryMethod) MatchesType(a Obj, itersLeft uint) bool {
 	if itersLeft == 0 {

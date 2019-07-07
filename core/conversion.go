@@ -6,8 +6,7 @@ type ArbitraryVal struct {
 }
 
 func (f ArbitraryVal) Call(x Obj) Obj                                  { return Called{f, x} }
-func (f ArbitraryVal) Simplify() Obj                                   { return f }
-func (f ArbitraryVal) SimplifyFully() Obj                              { return f }
+func (f ArbitraryVal) Simplify(depth uint) Obj                         { return f }
 func (f ArbitraryVal) Replace(n uint, x Obj) Obj                       { return f }
 func (f ArbitraryVal) GetUnboundVars(_ map[uint]bool, _ map[uint]bool) {}
 func (f ArbitraryVal) GetAllVars(_ map[uint]bool)                      {}
@@ -19,67 +18,104 @@ type ArbitraryMethod struct {
 	Otp Obj
 }
 
-func (f ArbitraryMethod) Call(x Obj) Obj {
-	if x.SimplifyFully() == f.Inp {
-		return f.Otp
-	} else {
-		return Called{f, x}
-	}
+func (f ArbitraryMethod) Call(x Obj) (returned Obj) {
+	defer func() {
+		if recover() != nil {
+			returned = Called{f, x}
+		}
+	}()
+	SimplifyUntil(func(a Obj) (bool, interface{}) { return a == f.Inp, nil }, x)
+	return f.Otp
 }
-func (f ArbitraryMethod) Simplify() Obj                                   { return f }
-func (f ArbitraryMethod) SimplifyFully() Obj                              { return f }
+func (f ArbitraryMethod) Simplify(depth uint) Obj                         { return f }
 func (f ArbitraryMethod) Replace(n uint, x Obj) Obj                       { return f }
 func (f ArbitraryMethod) GetUnboundVars(_ map[uint]bool, _ map[uint]bool) {}
 func (f ArbitraryMethod) GetAllVars(_ map[uint]bool)                      {}
 func (f ArbitraryMethod) ReplaceBindings(_ map[uint]bool) Obj             { return f }
 
+func objToIntHelper(f Obj) (bool, interface{}) {
+	n := uint(0)
+	for {
+		switch v := f.(type) {
+		case Called:
+			n++
+			f = v.Y
+			arb, isArb := v.X.(ArbitraryVal)
+			if !isArb || arb.ID != 0 {
+				return false, nil
+			}
+		case ArbitraryVal:
+			return v.ID == 1, n
+		default:
+			return false, nil
+		}
+	}
+}
 func ObjToInt(f Obj) uint {
 	cn, isChurchNum := f.(ChurchNum)
 	if isChurchNum {
 		return cn.Num
 	} else {
-		n := uint(0)
-		c := f.Call(ArbitraryVal{0}).Call(ArbitraryVal{1}).SimplifyFully()
-		for {
-			called, isCalled := c.(Called)
-			if isCalled {
-				n++
-				c = called.Y
-				if called.X.(ArbitraryVal).ID != 0 {
-					panic("Expected ArbitraryVal{0}")
-				}
-			} else {
-				if c.(ArbitraryVal).ID != 1 {
-					panic("ExpectedArbitraryVal{1}")
-				}
-				return n
-			}
-		}
+		return SimplifyUntil(objToIntHelper, f.Call(ArbitraryVal{0}).Call(ArbitraryVal{1})).(uint)
 	}
 }
 
+func objToBoolHelper(f Obj) (bool, interface{}) {
+	arb, isArb := f.(ArbitraryVal)
+	return isArb, (isArb && arb.ID == 0)
+}
 func ObjToBool(f Obj) bool {
-	c := f.Call(ArbitraryVal{0}).Call(ArbitraryVal{1}).SimplifyFully()
-	return c.(ArbitraryVal).ID == 0
+	return SimplifyUntil(objToBoolHelper, f.Call(ArbitraryVal{0}).Call(ArbitraryVal{1})).(bool)
 }
 
-// assumes that the given Obj is actually a tuple
+func objToTupleHelper(f Obj) (bool, interface{}) {
+	called, isCalled := f.(Called)
+	if !isCalled {
+		return false, nil
+	}
+	called2, isCalled2 := called.X.(Called)
+	if !isCalled2 {
+		return false, nil
+	}
+	_, isArb := called2.X.(ArbitraryVal)
+	return isArb, [2]Obj{called2.Y, called.Y}
+}
 func ObjToTuple(f Obj) (Obj, Obj) {
-	c := f.Call(ArbitraryVal{0}).SimplifyFully().(Called)
-	return c.X.(Called).Y, c.Y
+	x := SimplifyUntil(objToTupleHelper, f.Call(ArbitraryVal{0})).([2]Obj)
+	return x[0], x[1]
 }
 
-// assumes that the given Obj is actually a maybe
+type maybeEither struct {
+	b bool
+	Obj
+}
+
+func objToMaybeHelper(f Obj) (bool, interface{}) {
+	called, isCalled := f.(Called)
+	if isCalled {
+		arb, isArb := called.X.(ArbitraryVal)
+		return isArb && arb.ID == 0, maybeEither{true, called.Y}
+	} else {
+		arb, isArb := f.(ArbitraryVal)
+		return isArb && arb.ID == 1, maybeEither{false, nil}
+	}
+}
 func ObjToMaybe(f Obj) (bool, Obj) {
-	c := f.Call(ArbitraryVal{0}).Call(ArbitraryVal{1}).SimplifyFully()
-	called, isCalled := c.(Called)
-	return isCalled, called.Y
+	maybe := SimplifyUntil(objToMaybeHelper, f.Call(ArbitraryVal{0}).Call(ArbitraryVal{1})).(maybeEither)
+	return maybe.b, maybe.Obj
 }
 
+func objToEitherHelper(f Obj) (bool, interface{}) {
+	called, isCalled := f.(Called)
+	if !isCalled {
+		return false, nil
+	}
+	arb, isArb := called.X.(ArbitraryVal)
+	return isArb, maybeEither{arb.ID == 1, called.Y}
+}
 func ObjToEither(f Obj) (bool, Obj) {
-	c := f.Call(ArbitraryVal{0}).Call(ArbitraryVal{1}).SimplifyFully()
-	called := c.(Called)
-	return called.X.(ArbitraryVal).ID == 1, called.Y
+	either := SimplifyUntil(objToEitherHelper, f.Call(ArbitraryVal{0}).Call(ArbitraryVal{1})).(maybeEither)
+	return either.b, either.Obj
 }
 
 func splitTupleList(fs []Obj) []Obj {
