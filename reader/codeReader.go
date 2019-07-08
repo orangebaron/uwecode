@@ -187,7 +187,7 @@ func ImportReader(b byte, state interface{}, decls []Declaration) (interface{}, 
 			panic("unexpected end of import declaration")
 		}
 		decls = append(decls, convertedState.ImportDeclaration)
-		return NormalReaderState{NullExpression{}, NullExpression{}, nil, "", "", nil, false}, decls, NormalReader, NormalEOFFunction
+		return NormalReaderState{NullExpression{}, NullExpression{}, nil, "", "", nil, nil}, decls, NormalReader, NormalEOFFunction
 	} else {
 		convertedState.CurrentWord = convertedState.CurrentWord + string(b)
 		return convertedState, decls, ImportReader, ErrorEOFFunction
@@ -221,7 +221,7 @@ type NormalReaderState struct {
 	CurrentWord    string             // if not in parentheses
 	LastWord       string             // only for making new declarations, relevant only on non-paren-enclosed level
 	Declaration                       // relevant only on non-paren-enclosed level
-	ParenEnclosed  bool               // am i paren enclosed?
+	EnclosingState *NormalReaderState
 }
 
 func (s NormalReaderState) AddStringLiteralToEnd(str string, isSingleChar bool, decls []Declaration) (NormalReaderState, []Declaration, CharacterReader, EOFFunction) {
@@ -252,6 +252,13 @@ func (s NormalReaderState) SetDeclExpression(e Expression) NormalReaderState {
 	}
 	return s
 }
+func (s NormalReaderState) HighestEnclosing() NormalReaderState {
+	if s.EnclosingState != nil {
+		return s.EnclosingState.HighestEnclosing()
+	} else {
+		return s
+	}
+}
 
 func NormalEOFFunction(state interface{}, decls []Declaration) []Declaration {
 	convertedState, isAlreadyNormal := state.(NormalReaderState)
@@ -275,14 +282,14 @@ func NormalEOFFunction(state interface{}, decls []Declaration) []Declaration {
 func NormalReader(b byte, state interface{}, decls []Declaration) (interface{}, []Declaration, CharacterReader, EOFFunction) {
 	convertedState := state.(NormalReaderState)
 	if IsWhitespace(b) && IsDeclWord(convertedState.CurrentWord) {
-		if convertedState.ParenEnclosed {
+		if convertedState.EnclosingState != nil {
 			panic("Can't start a declaration within parentheses")
 		}
 		var newDecl Declaration = NormalDeclaration{convertedState.LastWord, NullExpression{}, convertedState.CurrentWord != "_="}
 		if convertedState.CurrentWord == ":" {
 			newDecl = TypeDeclaration{convertedState.LastWord, NullExpression{}}
 		}
-		newState := WhitespaceReaderState{NormalReaderState{NullExpression{}, NullExpression{}, nil, "", "", newDecl, false}, NormalReader, NormalEOFFunction}
+		newState := WhitespaceReaderState{NormalReaderState{NullExpression{}, NullExpression{}, nil, "", "", newDecl, nil}, NormalReader, NormalEOFFunction}
 		if convertedState.Declaration != nil {
 			convertedState = convertedState.SetDeclExpression(convertedState.LastExpression)
 			decls = append(decls, convertedState.Declaration)
@@ -301,17 +308,24 @@ func NormalReader(b byte, state interface{}, decls []Declaration) (interface{}, 
 				convertedState.CurrentWord = convertedState.CurrentWord + string(b)
 			}
 			if b == '(' {
-				newEnclosedNormState := NormalReaderState{NullExpression{}, NullExpression{}, nil, "", "", nil, true}
+				newEnclosedNormState := NormalReaderState{NullExpression{}, NullExpression{}, nil, "", "", nil, &convertedState}
 				convertedState.InParentheses = &newEnclosedNormState
-			} else if b == ')' && !convertedState.ParenEnclosed {
+			} else if b == ')' && convertedState.EnclosingState == nil {
 				panic("Used ')' without matching '(' beforehand")
 			}
 		} else {
 			isSecondToInner := convertedState.InParentheses.InParentheses == nil
-			stateEnclosed, _, _, _ := NormalReader(b, *convertedState.InParentheses, []Declaration{})
+			enclosedState := *convertedState.InParentheses
+			enclosedState.EnclosingState = &convertedState
+			stateEnclosed, _, newReader, newEOF := NormalReader(b, enclosedState, []Declaration{})
 			convertedStateEnclosed, isNormal := stateEnclosed.(NormalReaderState)
 			if !isNormal {
-				convertedStateEnclosed = stateEnclosed.(WhitespaceReaderState).State.(NormalReaderState)
+				whitespace, isWhitespace := stateEnclosed.(WhitespaceReaderState)
+				if !isWhitespace {
+					return stateEnclosed, decls, newReader, newEOF
+				} else {
+					convertedStateEnclosed = whitespace.State.(NormalReaderState)
+				}
 			}
 			convertedState.InParentheses = &convertedStateEnclosed
 			if b == ')' && isSecondToInner {
@@ -330,7 +344,7 @@ func NormalReader(b byte, state interface{}, decls []Declaration) (interface{}, 
 			}
 			return ImportReaderState{ImportStart, false, "", ImportDeclaration{false, "", []string{}, make(map[string]string)}}, decls, ImportReader, ErrorEOFFunction
 		} else if contains("\"'", b) {
-			return StringLiteralReaderState{convertedState, "", b == '\'', Unescaped, byte(0)}, decls, StringLiteralReader, ErrorEOFFunction
+			return StringLiteralReaderState{convertedState.HighestEnclosing(), "", b == '\'', Unescaped, byte(0)}, decls, StringLiteralReader, ErrorEOFFunction
 		} else if isSpecial {
 			return WhitespaceReaderState{convertedState, NormalReader, NormalEOFFunction}, decls, WhitespaceReader, NormalEOFFunction
 		} else {
@@ -361,7 +375,7 @@ func (e EvalError) Error() string {
 const readLength = 20 // arbitrary
 func ReadCode(reader io.Reader, dict DeclaredDict) (err error) {
 	bytes := make([]byte, readLength)
-	var state interface{} = NormalReaderState{NullExpression{}, NullExpression{}, nil, "", "", nil, false}
+	var state interface{} = NormalReaderState{NullExpression{}, NullExpression{}, nil, "", "", nil, nil}
 	charReader := NormalReader
 	decls := []Declaration{}
 	eofFunc := ErrorEOFFunction

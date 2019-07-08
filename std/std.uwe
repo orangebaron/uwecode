@@ -25,7 +25,7 @@ either-call = \a \b b a a
 [maybe]
 just = left
 none = 0
-maybe-call = rev `combine-then rev 0
+maybe-call = \a revrev (a `then just) none
 [tuple]
 ,t = \a \b \c c a b
 head-tup = rev true
@@ -33,7 +33,8 @@ tail-tup = rev false
 [list]
 ,l = ,t `combine-then just
 head-list = maybe-call head-tup
-tail-list = maybe-call tail-tup
+tail-list = maybe-call tail-tup `then revrev id 0
+maybe-elem-to-list = maybe-call \a a `,t 0
 @list = \a \b head-list `id b tail-list a
 push-list = recursive \self \elem revrev (\head,tail head-tup head,tail `,l self elem `id tail-tup head,tail) `id elem `,l 0
 reduce-list = recursive \self \f \base \list list (\head,tail self f (f (head-tup head,tail) base) `id tail-tup head,tail) base
@@ -55,7 +56,9 @@ shift-incr-tup _= tail-tup `then \a a `,t ++num a
 =num = \a \b <=num a b `and <=num b a
 >=num = \a \b =num a b `or >num a b
 <num = >=num `combine-then not
-[TODO more num things]
+/num = \a \b rev 0 `id recursive \self \n (*num b n `>num a) (--num n) `id self `id ++num n
+%num = \a \b a `-num b `*num a `/num b
+tostring-num = rev true `id recursive \self \isFirstDigit \n (=0 n) (isFirstDigit "0" "") `id self false (n `/num 10) `+list maybe-elem-to-list `id "0123456789" `@list n `%num 10
 [io]
 inp = left `then left
 otp = right `then left
