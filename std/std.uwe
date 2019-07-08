@@ -27,25 +27,27 @@ just = left
 none = 0
 maybe-call = rev `combine-then rev 0
 [tuple]
-,tup = \a \b \c c a b
+,t = \a \b \c c a b
 head-tup = rev true
 tail-tup = rev false
 [list]
-,list = ,tup `combine-then just
+,l = ,t `combine-then just
 head-list = maybe-call head-tup
 tail-list = maybe-call tail-tup
 @list = \a \b head-list `id b tail-list a
-reduce-list = recursive \self \f \base \list list (\head,tail self f (f base `id head-tup head,tail) `id tail-tup head,tail) base
-filter-list = \f reduce-list (\l \elem (f elem) (l `,list elem) l) 0
-map-list = \f reduce-list (\l \elem l `,list (f elem)) 0
-+list = reduce-list ,list
+push-list = recursive \self \elem revrev (\head,tail head-tup head,tail `,l self elem `id tail-tup head,tail) `id elem `,l 0
+reduce-list = recursive \self \f \base \list list (\head,tail self f (f (head-tup head,tail) base) `id tail-tup head,tail) base
+reverse-list = reduce-list ,l 0
+filter-list = \f reduce-list (\elem \l (f elem) (elem `push-list l) l) 0
+map-list = \f reduce-list (\elem \l f elem `push-list l) 0
++list = reduce-list push-list
 [num]
 ++num = \a \b b `then a b
 +num = rev ++num
 *num = \a +num a `revrev 0
 ^num = rev
-shift-incr-tup _= tail-tup `then \a a `,tup ++num a
---num = revrev shift-incr-tup (0 `,tup 0) `then head-tup
+shift-incr-tup _= tail-tup `then \a a `,t ++num a
+--num = revrev shift-incr-tup (0 `,t 0) `then head-tup
 -num = revrev --num
 =0 = const false `revrev true
 <=num = -num `combine-then =0

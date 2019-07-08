@@ -1,6 +1,6 @@
 package core
 
-const maxDepth = uint(500)
+const maxDepth = uint(10000)
 
 func min(a uint, b uint) uint {
 	if a > b {

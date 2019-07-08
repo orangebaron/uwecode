@@ -94,7 +94,7 @@ func (f Called) Simplify(depth uint) Obj {
 	if depth == 0 {
 		return f
 	}
-	v := f.X.Simplify(depth - 1).Call(f.Y.Simplify(depth - 1))
+	v := f.X.Call(f.Y)
 	if v != f {
 		v = v.Simplify(depth - 1)
 	}
@@ -132,7 +132,10 @@ type CalledChurchNum struct {
 }
 
 func (f CalledChurchNum) Call(a Obj) Obj {
-	return CalledCalledChurchNum{f.Num, f.X, a}
+	for i := uint(0); i < f.Num; i++ {
+		a = f.X.Call(a)
+	}
+	return a
 }
 func (f CalledChurchNum) Simplify(_ uint) Obj       { return f }
 func (f CalledChurchNum) Replace(n uint, x Obj) Obj { return CalledChurchNum{f.Num, f.X.Replace(n, x)} }
@@ -144,38 +147,6 @@ func (f CalledChurchNum) GetAllVars(vars map[uint]bool) {
 }
 func (f CalledChurchNum) ReplaceBindings(toReplace map[uint]bool) Obj {
 	return CalledChurchNum{f.Num, f.X.ReplaceBindings(toReplace)}
-}
-
-// a -> (x (x (x ... Num times ... (x y)))) a
-type CalledCalledChurchNum struct {
-	Num uint
-	X   Obj
-	Y   Obj
-}
-
-func (f CalledCalledChurchNum) Call(a Obj) Obj { return Called{f, a} }
-func (f CalledCalledChurchNum) Simplify(depth uint) Obj {
-	if depth == 0 {
-		return f
-	}
-	for i := uint(0); i < f.Num; i++ {
-		f.Y = f.X.Call(f.Y)
-	}
-	return f.Y.Simplify(depth - 1)
-}
-func (f CalledCalledChurchNum) Replace(n uint, x Obj) Obj {
-	return CalledCalledChurchNum{f.Num, f.X.Replace(n, x), f.Y.Replace(n, x)}
-}
-func (f CalledCalledChurchNum) GetUnboundVars(bound map[uint]bool, unbound map[uint]bool) {
-	f.X.GetUnboundVars(bound, unbound)
-	f.Y.GetUnboundVars(bound, unbound)
-}
-func (f CalledCalledChurchNum) GetAllVars(vars map[uint]bool) {
-	f.X.GetAllVars(vars)
-	f.Y.GetAllVars(vars)
-}
-func (f CalledCalledChurchNum) ReplaceBindings(toReplace map[uint]bool) Obj {
-	return CalledCalledChurchNum{f.Num, f.X.ReplaceBindings(toReplace), f.Y.ReplaceBindings(toReplace)}
 }
 
 type ChurchTupleChar struct {
