@@ -1,4 +1,4 @@
-package std
+package controller
 
 import "../core"
 import "fmt"
@@ -74,6 +74,7 @@ func (c StdController) TakeOutput(pid string, otp core.Obj) {
 	default:
 		panic("Invalid command number")
 	}
+	// TODO: get os args
 }
 func (c StdController) InitNewProcess() string {
 	*c.PidNum++
