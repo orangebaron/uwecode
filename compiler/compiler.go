@@ -6,6 +6,7 @@ import "io/ioutil"
 import "fmt"
 import "os/exec"
 import "errors"
+import "strings"
 
 func readFile(filename string) (reader.DeclaredDict, error) {
 	dict := reader.NewDeclaredDict()
@@ -30,7 +31,8 @@ func makeGoFile(filename string, importStrings []string) error {
 	for _, v := range importStrings {
 		goifiedImportString += "import\"" + v + "\"\n"
 	}
-	str := fmt.Sprintf("package main\n\nimport \"./core\"\n%s\nvar mainObj core.Obj = %#v\n\nfunc main() {\n\tcore.RunProcess(mainObj, controller.NewController(), make(chan struct{})\n}", goifiedImportString, mainObj) // TODO: ./core -> github link
+	projNameSplit := strings.Split(importStrings[0], "/")
+	str := fmt.Sprintf("package main\n\nimport \"./core\"\n%s\nvar mainObj core.Obj = %#v\n\nfunc main() {\n\tcore.RunProcess(mainObj, %s.NewController(), make(chan struct{}))\n}", goifiedImportString, mainObj, projNameSplit[len(projNameSplit)-1]) // TODO: ./core -> github link
 	err = ioutil.WriteFile(filename+".go", []byte(str), 0644)
 	if err != nil {
 		return err
@@ -38,12 +40,21 @@ func makeGoFile(filename string, importStrings []string) error {
 	return nil
 }
 
+func runCmdNicely(cmd *exec.Cmd) error {
+	_, err := cmd.Output()
+	if exitErr, isExitErr := err.(*exec.ExitError); isExitErr {
+		return errors.New(string(exitErr.Stderr) + "\n" + err.Error())
+	} else {
+		return err
+	}
+}
+
 func buildFile(filename string, importStrings []string) error {
 	err := makeGoFile(filename, importStrings)
 	if err != nil {
 		return err
 	}
-	err = exec.Command("go", "build", filename + ".go").Run()
+	err = runCmdNicely(exec.Command("go", "build", filename+".go"))
 	if err != nil {
 		return err
 	}
@@ -56,7 +67,7 @@ func runFile(filename string, importStrings []string) error {
 	if err != nil {
 		return err
 	}
-	err = exec.Command("go", "run", filename + ".go").Run()
+	err = runCmdNicely(exec.Command("go", "run", filename+".go"))
 	if err != nil {
 		return err
 	}
@@ -80,6 +91,10 @@ func command_run() error {
 	return runFile(os.Args[2], []string{string(controller)})
 }
 
+func command_project() error {
+	return runFile("project", []string{"./std/std_project"})
+}
+
 func main() {
 	var err error
 	switch os.Args[1] {
@@ -87,6 +102,8 @@ func main() {
 		err = command_build()
 	case "run":
 		err = command_run()
+	case "project":
+		err = command_project()
 	default:
 		err = errors.New("Unrecognized command")
 	}

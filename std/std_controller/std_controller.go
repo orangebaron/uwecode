@@ -1,6 +1,6 @@
-package controller
+package std_controller
 
-import "../core"
+import "../../core"
 import "fmt"
 import "sync"
 import "bufio"
