@@ -1,0 +1,6 @@
+left _= \a \b \c b a
+right _= \a \b \c c a
+otp _= \a \b left (right (\c c a b))
+controller = \a otp (right a)
+import = \a otp (left a)
+stop = right (\a \b b)
