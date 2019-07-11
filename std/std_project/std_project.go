@@ -17,7 +17,7 @@ func runCmdNicely(cmd *exec.Cmd) error {
 }
 
 type ProjectController struct {
-	FirstThread     *bool
+	FirstThread           *bool
 	AlreadySaidController *bool
 }
 
@@ -38,9 +38,9 @@ func (c ProjectController) TakeOutput(pid string, otp core.Obj) {
 		}
 	} else {
 		split := strings.Split(str, "/")
-		afterLastSlash := split[len(split) - 1]
-		beforePeriod := afterLastSlash[:len(afterLastSlash) - 4]
-		err := runCmdNicely(exec.Command("git", "clone", str, ".uwe/" + beforePeriod))
+		afterLastSlash := split[len(split)-1]
+		beforePeriod := afterLastSlash[:len(afterLastSlash)-4]
+		err := runCmdNicely(exec.Command("git", "clone", str, ".uwe/"+beforePeriod))
 		if err != nil {
 			panic(err)
 		}
