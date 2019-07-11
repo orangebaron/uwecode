@@ -12,27 +12,6 @@ func (f ArbitraryVal) GetUnboundVars(_ map[uint]bool, _ map[uint]bool) {}
 func (f ArbitraryVal) GetAllVars(_ map[uint]bool)                      {}
 func (f ArbitraryVal) ReplaceBindings(_ map[uint]bool) Obj             { return f }
 
-// arbitrary method: only accepts Inp as input, returns Otp if given Inp
-type ArbitraryMethod struct {
-	Inp Obj
-	Otp Obj
-}
-
-func (f ArbitraryMethod) Call(x Obj) (returned Obj) {
-	defer func() {
-		if recover() != nil {
-			returned = Called{f, x}
-		}
-	}()
-	SimplifyUntil(func(a Obj) (bool, interface{}) { return a == f.Inp, nil }, x)
-	return f.Otp
-}
-func (f ArbitraryMethod) Simplify(depth uint) Obj                         { return f }
-func (f ArbitraryMethod) Replace(n uint, x Obj) Obj                       { return f }
-func (f ArbitraryMethod) GetUnboundVars(_ map[uint]bool, _ map[uint]bool) {}
-func (f ArbitraryMethod) GetAllVars(_ map[uint]bool)                      {}
-func (f ArbitraryMethod) ReplaceBindings(_ map[uint]bool) Obj             { return f }
-
 func objToIntHelper(f Obj) (bool, interface{}) {
 	n := uint(0)
 	for {
@@ -191,7 +170,7 @@ func ObjToType(f Obj) Type {
 	isTup, val := ObjToEither(f)
 	if isTup {
 		a, b := ObjToTuple(val)
-		return ArbitraryMethod{TBDType{a}, TBDType{b}}
+		return TypeMethod{TBDType{a}, TBDType{b}}
 	} else {
 		return ArbitraryVal{ObjToInt(val)}
 	}

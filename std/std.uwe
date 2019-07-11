@@ -64,3 +64,10 @@ inp = left `then left
 otp = ,T `combineThen right `then left
 fork = ,T `combineThen just `then right
 stop = right false
+[Types]
+T = left
+-> = ,T `combineThen right
+id : T 0 `-> T 0
+Num = (T 0 `-> T 0) `-> T 0 `-> T 0
+++Num : Num `-> Num
+[type declarations for half the things don't work yet...]
