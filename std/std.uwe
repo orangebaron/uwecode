@@ -1,66 +1,66 @@
 [basic functions]
 id = \a a
 then = \a \b \c b `id a c
-combine-then = \a \b \c \d b `id a c d
+combineThen = \a \b \c \d b `id a c d
 const = \a \b a
 rev = \a \b b a
-revrev = \a \b rev a `then rev b
-self-call = \a a a
-recursive = \a self-call \b a `id b b
-[bool]
+revRev = \a \b rev a `then rev b
+selfCall = \a a a
+recursive = \a selfCall \b a `id b b
+[Bool]
 true = const
 false = 0
 and = \a \b a b a
 or = \a \b a a b
-not = revrev false true
-nand = and `combine-then not
-nor = or `combine-then not
+not = revRev false true
+nand = and `combineThen not
+nor = or `combineThen not
 xor = \a \b or a b `and nand a b
-xnor = xor `combine-then not
-tostring-bool = revrev "true" "false"
-[either]
+xnor = xor `combineThen not
+Bool->String = revRev "true" "false"
+[Either]
 left = \a \b const `id b a
 right = \a \b \c c a
-either-call = \a \b b a a
-[maybe]
+call_Either = \a \b b a a
+[Maybe]
 just = left
 none = 0
-maybe-call = \a revrev (a `then just) none
-[tuple]
-,t = \a \b \c c a b
-head-tup = rev true
-tail-tup = rev false
-[list]
-,l = ,t `combine-then just
-head-list = maybe-call head-tup
-tail-list = maybe-call tail-tup `then revrev id 0
-maybe-elem-to-list = maybe-call \a a `,t 0
-@list = \a \b head-list `id b tail-list a
-push-list = recursive \self \elem revrev (\head,tail head-tup head,tail `,l self elem `id tail-tup head,tail) `id elem `,l 0
-reduce-list = recursive \self \f \base \list list (\head,tail self f (f (head-tup head,tail) base) `id tail-tup head,tail) base
-reverse-list = reduce-list ,l 0
-filter-list = \f reduce-list (\elem \l (f elem) (elem `push-list l) l) 0
-map-list = \f reduce-list (\elem \l f elem `push-list l) 0
-+list = reduce-list push-list
-[num]
-++num = \a \b b `then a b
-+num = rev ++num
-*num = \a +num a `revrev 0
-^num = rev
-shift-incr-tup _= tail-tup `then \a a `,t ++num a
---num = revrev shift-incr-tup (0 `,t 0) `then head-tup
--num = revrev --num
-=0 = const false `revrev true
-<=num = -num `combine-then =0
->num = <=num `combine-then not
-=num = \a \b <=num a b `and <=num b a
->=num = \a \b =num a b `or >num a b
-<num = >=num `combine-then not
-/num = \a \b rev 0 `id recursive \self \n (*num b n `>num a) (--num n) `id self `id ++num n
-%num = \a \b a `-num b `*num a `/num b
-tostring-num = rev true `id recursive \self \isFirstDigit \n (=0 n) (isFirstDigit "0" "") `id self false (n `/num 10) `+list maybe-elem-to-list `id "0123456789" `@list n `%num 10
-[io]
+call_Maybe = \a revRev (a `then just) none
+[Tup]
+,T = \a \b \c c a b
+head_Tup = rev true
+tail_Tup = rev false
+[List]
+,L = ,T `combineThen just
+head_List = call_Maybe head_Tup
+tail_List = call_Maybe tail_Tup `then revRev id 0
+Maybe->List = call_Maybe \a a `,T 0
+@List = \a \b head_List `id b tail_List a
+push_List = recursive \self \elem revRev (\head,tail head_Tup head,tail `,L self elem `id tail_Tup head,tail) `id elem `,L 0
+reduce_List = recursive \self \f \base \list list (\head,tail self f (f (head_Tup head,tail) base) `id tail_Tup head,tail) base
+reverse_List = reduce_List ,L 0
+filter_List = \f reduce_List (\elem \l (f elem) (elem `push_List l) l) 0
+map_List = \f reduce_List (\elem \l f elem `push_List l) 0
++List = reduce_List push_List
+[Num]
+++Num = \a \b b `then a b
++Num = rev ++Num
+*Num = \a +Num a `revRev 0
+^Num = rev
+shiftIncr_Tup _= tail_Tup `then \a a `,T ++Num a
+--Num = revRev shiftIncr_Tup (0 `,T 0) `then head_Tup
+-Num = revRev --Num
+=0 _= const false `revRev true
+<=Num = -Num `combineThen =0
+>Num = <=Num `combineThen not
+=Num = \a \b <=Num a b `and <=Num b a
+>=Num = \a \b =Num a b `or >Num a b
+<Num = >=Num `combineThen not
+/Num = \a \b rev 0 `id recursive \self \n (*Num b n `>Num a) (--Num n) `id self `id ++Num n
+%Num = \a \b a `-Num b `*Num a `/Num b
+Num->String = rev true `id recursive \self \isFirstDigit \n (=0 n) (isFirstDigit "0" "") `id self false (n `/Num 10) `+List Maybe->List `id "0123456789" `@List n `%Num 10
+[IO]
 inp = left `then left
-otp = ,t `combine-then right `then left
-fork = ,t `combine-then just `then right
+otp = ,T `combineThen right `then left
+fork = ,T `combineThen just `then right
 stop = right false
