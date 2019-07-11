@@ -67,7 +67,13 @@ func runFile(filename string, importStrings []string) error {
 	if err != nil {
 		return err
 	}
-	err = runCmdNicely(exec.Command("go", "run", filename+".go"))
+	err = runCmdNicely(exec.Command("go", "build", filename+".go"))
+	if err != nil {
+		return err
+	}
+	cmd := exec.Cmd{Path: "./" + filename, Stdin: os.Stdin, Stdout: os.Stdout, Stderr: os.Stderr}
+	err = cmd.Run()
+	os.Remove(filename)
 	if err != nil {
 		return err
 	}
