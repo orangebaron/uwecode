@@ -52,7 +52,7 @@ func (d DeclaredDict) ClearWithinDeclInfo() {
 func (d DeclaredDict) GetObj(name string) core.Obj {
 	if d.WithinDecl[name] != 0 {
 		return core.ReturnVal{d.WithinDecl[name]}
-	else if d.Public[name] != nil {
+	} else if d.Public[name] != nil {
 		return d.Public[name]
 	} else if d.Private[name] != nil {
 		return d.Private[name]
