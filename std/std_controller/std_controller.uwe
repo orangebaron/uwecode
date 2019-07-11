@@ -1,0 +1,12 @@
+{std/std}
+otpTup _= \a \b otp `id a `,t b
+otpInp _= \n \v inp `then otpTup n v
+getPid  = otpInp 0 0
+print   = otpTup 1
+error   = otpTup 2
+input   = otpInp 3 0
+cmd     = otpInp 4
+cmdOut  = otpInp 5
+cmdErr  = otpInp 6
+cmdIn   = ,t `combine-then otpTup 7
+cmdWait = otpTup 8

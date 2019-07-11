@@ -61,6 +61,6 @@ shift-incr-tup _= tail-tup `then \a a `,t ++num a
 tostring-num = rev true `id recursive \self \isFirstDigit \n (=0 n) (isFirstDigit "0" "") `id self false (n `/num 10) `+list maybe-elem-to-list `id "0123456789" `@list n `%num 10
 [io]
 inp = left `then left
-otp = right `then left
-fork = just `then right
+otp = ,t `combine-then right `then left
+fork = ,t `combine-then just `then right
 stop = right false

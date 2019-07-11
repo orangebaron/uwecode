@@ -304,7 +304,7 @@ type ImportDeclaration struct {
 
 func (d ImportDeclaration) Apply(dict DeclaredDict) {
 	newDict := NewDeclaredDict()
-	f, err := os.Open(d.Name)
+	f, err := os.Open(d.Name + ".uwe")
 	if err != nil {
 		panic(err)
 	}
