@@ -1,81 +1,114 @@
 package core
 
-type Type interface {
-	MatchesType(Obj, uint) bool
-	IsToObj(Obj) bool
-	ToObj() Obj
+type TypeMap struct {
+	dict map[Type]Obj // type has a different == function, so we have to use that
 }
 
-func (t ArbitraryVal) MatchesType(a Obj, _ uint) (returned bool) {
+func MakeTypeMap() TypeMap {
+	return TypeMap{make(map[Type]Obj)}
+}
+
+func (m TypeMap) Get(t Type) Obj {
+	for k, v := range m.dict {
+		if t.EqualsType(k, 1000) { // TODO: 1000?
+			return v
+		}
+	}
+	return TypeObj{t, m}
+}
+func (m TypeMap) Set(k Type, v Obj) {
+	m.dict[k] = v
+}
+
+type Type interface {
+	MatchesType(Obj, uint, TypeMap) bool
+	EqualsType(Type, uint) bool
+	CallType(Obj, TypeMap) Obj
+}
+
+func (t ArbitraryVal) MatchesType(a Obj, _ uint, _ TypeMap) (returned bool) {
 	defer func() {
 		if recover() != nil {
 			returned = false
 		}
 	}()
-	SimplifyUntil(func(f Obj) (bool, interface{}) { return f == t, nil }, a)
+	SimplifyUntil(func(f Obj) (bool, interface{}) {
+		to, isTo := f.(TypeObj)
+		return isTo && to.Type == t, nil
+	}, a)
 	return true
 }
-func (t ArbitraryVal) IsToObj(a Obj) bool { return a == t }
-func (t ArbitraryVal) ToObj() Obj         { return t }
+func (t ArbitraryVal) EqualsType(a Type, depth uint) bool {
+	if arb, isArb := a.(ArbitraryVal); isArb {
+		return arb.ID == t.ID
+	} else if depth == 0 {
+		return true
+	} else {
+		return a.EqualsType(t, depth-1)
+	}
+}
+func (t ArbitraryVal) CallType(a Obj, dict TypeMap) Obj {
+	return Called{dict.Get(t), a}
+}
 
 type MethodType struct {
 	Inp Type
 	Otp Type
 }
 
-func (t MethodType) MatchesType(a Obj, itersLeft uint) bool {
-	if itersLeft == 0 {
+func (t MethodType) MatchesType(a Obj, depth uint, dict TypeMap) bool {
+	if depth == 0 {
+		return true
+	} else {
+		return t.Otp.MatchesType(a.Call(TypeObj{t.Inp, dict}), depth-1, dict)
+	}
+}
+func (t MethodType) EqualsType(a Type, depth uint) bool {
+	if a == t {
+		return true
+	} else if depth == 0 {
 		return true
 	} else if _, isArb := a.(ArbitraryVal); isArb {
-		//		panic("lol")
 		return false
+	} else if meth, isMeth := a.(MethodType); isMeth {
+		return t.Inp.EqualsType(meth.Inp, depth-1) && t.Otp.EqualsType(meth.Otp, depth-1)
 	} else {
-		return t.Otp.MatchesType(a.Call(t.Inp.ToObj()), itersLeft-1)
+		return a.EqualsType(t, depth-1)
 	}
 }
-func (t MethodType) IsToObj(a Obj) bool {
-	// TODO: that assumes its simplified fully (fair assumption) and also that == works right (bad assumption)
-	if methodObj, isMethodObj := a.(MethodObj); isMethodObj {
-		return methodObj.Inp == t.Inp && t.Otp.IsToObj(methodObj.Otp)
+func (t MethodType) CallType(a Obj, dict TypeMap) Obj {
+	if t.Inp.MatchesType(a, 1000, dict) { // TODO 1000?
+		dict.Set(t.Inp, a)
+		return dict.Get(t.Otp)
 	} else {
-		return false
+		return Called{TypeObj{t, dict}, a}
 	}
 }
-func (t MethodType) ToObj() Obj { return MethodObj{t.Inp, t.Otp.ToObj()} }
-
-type MethodObj struct {
-	Inp Type
-	Otp Obj
-}
-
-func (f MethodObj) Call(a Obj) Obj {
-	if f.Inp.MatchesType(a, 1000) { // TODO number other than 1000 lol
-		return f.Otp.ReplaceF(func(x Obj) bool { return f.Inp.IsToObj(x) }, a)
-	} else {
-		return Called{f, a}
-	}
-}
-func (f MethodObj) Simplify(_ uint) Obj       { return f }
-func (f MethodObj) Replace(_ uint, _ Obj) Obj { return f }
-func (f MethodObj) ReplaceF(fun func(Obj) bool, x Obj) Obj {
-	if fun(f) {
-		return x
-	} else {
-		return f
-	}
-}
-func (f MethodObj) GetUnboundVars(_ map[uint]bool, _ map[uint]bool) {}
-func (f MethodObj) GetAllVars(_ map[uint]bool)                      {}
-func (f MethodObj) ReplaceBindings(_ map[uint]bool) Obj             { return f }
 
 type TBDType struct {
 	Obj
 }
 
-func (t TBDType) MatchesType(a Obj, itersLeft uint) bool {
-	return ObjToType(t.Obj).MatchesType(a, itersLeft)
+func (t TBDType) MatchesType(a Obj, depth uint, dict TypeMap) bool {
+	return ObjToType(t.Obj).MatchesType(a, depth, dict)
 }
-func (t TBDType) IsToObj(a Obj) bool { return ObjToType(t.Obj).IsToObj(a) }
-func (t TBDType) ToObj() Obj {
-	return ObjToType(t.Obj).ToObj()
+func (t TBDType) EqualsType(a Type, depth uint) bool {
+	return ObjToType(t.Obj).EqualsType(a, depth)
 }
+func (t TBDType) CallType(a Obj, dict TypeMap) Obj {
+	return ObjToType(t.Obj).CallType(a, dict)
+}
+
+type TypeObj struct {
+	Type
+	TypeMap
+}
+
+func (f TypeObj) Call(a Obj) Obj {
+	return f.Type.CallType(a, f.TypeMap)
+}
+func (f TypeObj) Simplify(_ uint) Obj                             { return f }
+func (f TypeObj) Replace(_ uint, _ Obj) Obj                       { return f }
+func (f TypeObj) GetUnboundVars(_ map[uint]bool, _ map[uint]bool) {}
+func (f TypeObj) GetAllVars(_ map[uint]bool)                      {}
+func (f TypeObj) ReplaceBindings(_ map[uint]bool) Obj             { return f }

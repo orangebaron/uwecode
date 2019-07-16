@@ -4,7 +4,6 @@ type Obj interface {
 	Call(Obj) Obj
 	Simplify(uint) Obj
 	Replace(uint, Obj) Obj
-	ReplaceF(func(Obj) bool, Obj) Obj
 	GetUnboundVars(map[uint]bool, map[uint]bool)
 	GetAllVars(map[uint]bool)
 	ReplaceBindings(map[uint]bool) Obj
@@ -19,13 +18,6 @@ func (f ReturnVal) Call(x Obj) Obj      { return Called{f, x} }
 func (f ReturnVal) Simplify(_ uint) Obj { return f }
 func (f ReturnVal) Replace(n uint, x Obj) Obj {
 	if n == f.N {
-		return x
-	} else {
-		return f
-	}
-}
-func (f ReturnVal) ReplaceF(fun func(Obj) bool, x Obj) Obj {
-	if fun(f) {
 		return x
 	} else {
 		return f
@@ -62,13 +54,6 @@ func (f Function) Replace(n uint, x Obj) Obj {
 		return f
 	} else {
 		return Function{f.N, f.X.Replace(n, x)}
-	}
-}
-func (f Function) ReplaceF(fun func(Obj) bool, x Obj) Obj {
-	if fun(f) {
-		return x
-	} else {
-		return Function{f.N, f.X.ReplaceF(fun, x)}
 	}
 }
 func (f Function) GetUnboundVars(bound map[uint]bool, unbound map[uint]bool) {
@@ -116,13 +101,6 @@ func (f Called) Simplify(depth uint) Obj {
 	return v
 }
 func (f Called) Replace(n uint, x Obj) Obj { return Called{f.X.Replace(n, x), f.Y.Replace(n, x)} }
-func (f Called) ReplaceF(fun func(Obj) bool, x Obj) Obj {
-	if fun(f) {
-		return x
-	} else {
-		return Called{f.X.ReplaceF(fun, x), f.Y.ReplaceF(fun, x)}
-	}
-}
 func (f Called) GetUnboundVars(bound map[uint]bool, unbound map[uint]bool) {
 	f.X.GetUnboundVars(bound, unbound)
 	f.Y.GetUnboundVars(bound, unbound)
@@ -140,16 +118,9 @@ type ChurchNum struct {
 	Num uint
 }
 
-func (f ChurchNum) Call(a Obj) Obj            { return CalledChurchNum{f.Num, a} }
-func (f ChurchNum) Simplify(_ uint) Obj       { return f }
-func (f ChurchNum) Replace(_ uint, _ Obj) Obj { return f }
-func (f ChurchNum) ReplaceF(fun func(Obj) bool, x Obj) Obj {
-	if fun(f) {
-		return x
-	} else {
-		return f
-	}
-}
+func (f ChurchNum) Call(a Obj) Obj                                  { return CalledChurchNum{f.Num, a} }
+func (f ChurchNum) Simplify(_ uint) Obj                             { return f }
+func (f ChurchNum) Replace(_ uint, _ Obj) Obj                       { return f }
 func (f ChurchNum) GetUnboundVars(_ map[uint]bool, _ map[uint]bool) {}
 func (f ChurchNum) GetAllVars(_ map[uint]bool)                      {}
 func (f ChurchNum) ReplaceBindings(_ map[uint]bool) Obj             { return f }
@@ -168,13 +139,6 @@ func (f CalledChurchNum) Call(a Obj) Obj {
 }
 func (f CalledChurchNum) Simplify(_ uint) Obj       { return f }
 func (f CalledChurchNum) Replace(n uint, x Obj) Obj { return CalledChurchNum{f.Num, f.X.Replace(n, x)} }
-func (f CalledChurchNum) ReplaceF(fun func(Obj) bool, x Obj) Obj {
-	if fun(f) {
-		return x
-	} else {
-		return CalledChurchNum{f.Num, f.X.ReplaceF(fun, x)}
-	}
-}
 func (f CalledChurchNum) GetUnboundVars(bound map[uint]bool, unbound map[uint]bool) {
 	f.X.GetUnboundVars(bound, unbound)
 }
@@ -206,16 +170,9 @@ func (f ChurchTupleChar) ToNormalObj() Obj {
 	}
 	return tuple(tuple(tuple(bools[0], bools[1]), tuple(bools[2], bools[3])), tuple(tuple(bools[4], bools[5]), tuple(bools[6], bools[7])))
 }
-func (f ChurchTupleChar) Call(a Obj) Obj            { return Called{f.ToNormalObj(), a} }
-func (f ChurchTupleChar) Simplify(_ uint) Obj       { return f }
-func (f ChurchTupleChar) Replace(_ uint, _ Obj) Obj { return f }
-func (f ChurchTupleChar) ReplaceF(fun func(Obj) bool, x Obj) Obj {
-	if fun(f) {
-		return x
-	} else {
-		return f
-	}
-}
+func (f ChurchTupleChar) Call(a Obj) Obj                                  { return Called{f.ToNormalObj(), a} }
+func (f ChurchTupleChar) Simplify(_ uint) Obj                             { return f }
+func (f ChurchTupleChar) Replace(_ uint, _ Obj) Obj                       { return f }
 func (f ChurchTupleChar) GetUnboundVars(_ map[uint]bool, _ map[uint]bool) {}
 func (f ChurchTupleChar) GetAllVars(_ map[uint]bool)                      {}
 func (f ChurchTupleChar) ReplaceBindings(_ map[uint]bool) Obj             { return f }
@@ -234,16 +191,9 @@ func (f ChurchTupleCharString) ToNormalObj() Obj {
 		return just(tuple(ChurchTupleChar{f.Str[0]}, ChurchTupleCharString{f.Str[1:]}))
 	}
 }
-func (f ChurchTupleCharString) Call(a Obj) Obj            { return Called{f.ToNormalObj(), a} }
-func (f ChurchTupleCharString) Simplify(_ uint) Obj       { return f }
-func (f ChurchTupleCharString) Replace(_ uint, _ Obj) Obj { return f }
-func (f ChurchTupleCharString) ReplaceF(fun func(Obj) bool, x Obj) Obj {
-	if fun(f) {
-		return x
-	} else {
-		return f
-	}
-}
+func (f ChurchTupleCharString) Call(a Obj) Obj                                  { return Called{f.ToNormalObj(), a} }
+func (f ChurchTupleCharString) Simplify(_ uint) Obj                             { return f }
+func (f ChurchTupleCharString) Replace(_ uint, _ Obj) Obj                       { return f }
 func (f ChurchTupleCharString) GetUnboundVars(_ map[uint]bool, _ map[uint]bool) {}
 func (f ChurchTupleCharString) GetAllVars(_ map[uint]bool)                      {}
 func (f ChurchTupleCharString) ReplaceBindings(_ map[uint]bool) Obj             { return f }

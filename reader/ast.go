@@ -341,7 +341,7 @@ type TypeDeclaration struct {
 }
 
 func (d TypeDeclaration) Apply(dict DeclaredDict) {
-	if !core.ObjToType(d.Expression.ToObj(dict)).MatchesType(dict.GetObj(d.Name), 1000) {
+	if !core.ObjToType(d.Expression.ToObj(dict)).MatchesType(dict.GetObj(d.Name), 1000, core.MakeTypeMap()) {
 		panic("Type does not match")
 	}
 }
