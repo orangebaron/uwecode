@@ -4,11 +4,12 @@ type TypeMap struct {
 	dict map[Type]Obj // type has a different == function, so we have to use that
 }
 
-func MakeTypeMap() TypeMap {
-	return TypeMap{make(map[Type]Obj)}
+func MakeTypeMap() *TypeMap {
+	tm := TypeMap{make(map[Type]Obj)}
+	return &tm
 }
 
-func (m TypeMap) Get(t Type) Obj {
+func (m *TypeMap) Get(t Type) Obj {
 	for k, v := range m.dict {
 		if t.EqualsType(k, 1000) { // TODO: 1000?
 			return v
@@ -16,17 +17,17 @@ func (m TypeMap) Get(t Type) Obj {
 	}
 	return TypeObj{t, m}
 }
-func (m TypeMap) Set(k Type, v Obj) {
+func (m *TypeMap) Set(k Type, v Obj) {
 	m.dict[k] = v
 }
 
 type Type interface {
-	MatchesType(Obj, uint, TypeMap) bool
+	MatchesType(Obj, uint, *TypeMap) bool
 	EqualsType(Type, uint) bool
-	CallType(Obj, TypeMap) Obj
+	CallType(Obj, *TypeMap) Obj
 }
 
-func (t ArbitraryVal) MatchesType(a Obj, _ uint, _ TypeMap) (returned bool) {
+func (t ArbitraryVal) MatchesType(a Obj, _ uint, _ *TypeMap) (returned bool) {
 	defer func() {
 		if recover() != nil {
 			returned = false
@@ -34,7 +35,7 @@ func (t ArbitraryVal) MatchesType(a Obj, _ uint, _ TypeMap) (returned bool) {
 	}()
 	SimplifyUntil(func(f Obj) (bool, interface{}) {
 		to, isTo := f.(TypeObj)
-		return isTo && to.Type == t, nil
+		return isTo && to.Type.EqualsType(t, 1000), nil
 	}, a)
 	return true
 }
@@ -47,7 +48,7 @@ func (t ArbitraryVal) EqualsType(a Type, depth uint) bool {
 		return a.EqualsType(t, depth-1)
 	}
 }
-func (t ArbitraryVal) CallType(a Obj, dict TypeMap) Obj {
+func (t ArbitraryVal) CallType(a Obj, dict *TypeMap) Obj {
 	return Called{dict.Get(t), a}
 }
 
@@ -56,7 +57,7 @@ type MethodType struct {
 	Otp Type
 }
 
-func (t MethodType) MatchesType(a Obj, depth uint, dict TypeMap) bool {
+func (t MethodType) MatchesType(a Obj, depth uint, dict *TypeMap) bool {
 	if depth == 0 {
 		return true
 	} else {
@@ -64,9 +65,7 @@ func (t MethodType) MatchesType(a Obj, depth uint, dict TypeMap) bool {
 	}
 }
 func (t MethodType) EqualsType(a Type, depth uint) bool {
-	if a == t {
-		return true
-	} else if depth == 0 {
+	if depth == 0 {
 		return true
 	} else if _, isArb := a.(ArbitraryVal); isArb {
 		return false
@@ -76,7 +75,7 @@ func (t MethodType) EqualsType(a Type, depth uint) bool {
 		return a.EqualsType(t, depth-1)
 	}
 }
-func (t MethodType) CallType(a Obj, dict TypeMap) Obj {
+func (t MethodType) CallType(a Obj, dict *TypeMap) Obj {
 	if t.Inp.MatchesType(a, 1000, dict) { // TODO 1000?
 		dict.Set(t.Inp, a)
 		return dict.Get(t.Otp)
@@ -89,19 +88,19 @@ type TBDType struct {
 	Obj
 }
 
-func (t TBDType) MatchesType(a Obj, depth uint, dict TypeMap) bool {
+func (t TBDType) MatchesType(a Obj, depth uint, dict *TypeMap) bool {
 	return ObjToType(t.Obj).MatchesType(a, depth, dict)
 }
 func (t TBDType) EqualsType(a Type, depth uint) bool {
 	return ObjToType(t.Obj).EqualsType(a, depth)
 }
-func (t TBDType) CallType(a Obj, dict TypeMap) Obj {
+func (t TBDType) CallType(a Obj, dict *TypeMap) Obj {
 	return ObjToType(t.Obj).CallType(a, dict)
 }
 
 type TypeObj struct {
 	Type
-	TypeMap
+	*TypeMap
 }
 
 func (f TypeObj) Call(a Obj) Obj {
