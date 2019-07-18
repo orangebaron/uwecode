@@ -17,8 +17,12 @@ func SimplifyUntil(f func(Obj) (bool, interface{}), obj Obj) interface{} {
 		} else {
 			obj = newObj
 			newObj = obj.Simplify(depth)
-			if newObj == obj && depth == maxDepth {
-				break
+			if newObj == obj {
+				if depth == maxDepth {
+					break
+				} else {
+					depth += 1000
+				}
 			}
 		}
 	}

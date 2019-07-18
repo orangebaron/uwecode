@@ -29,8 +29,11 @@ type Type interface {
 
 func (t ArbitraryVal) MatchesType(a Obj, _ uint, _ *TypeMap) (returned bool) {
 	defer func() {
-		if recover() != nil {
+		r := recover()
+		if r == "Failed to simplify to expected value" {
 			returned = false
+		} else if r != nil {
+			panic(r)
 		}
 	}()
 	SimplifyUntil(func(f Obj) (bool, interface{}) {
