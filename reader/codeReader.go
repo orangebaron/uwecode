@@ -246,9 +246,9 @@ func (s NormalReaderState) SetDeclExpression(e Expression) NormalReaderState {
 		normD.Expression = e
 		s.Declaration = normD
 	} else {
-		typeD := s.Declaration.(TypeDeclaration)
-		typeD.Expression = e
-		s.Declaration = typeD
+		assertD := s.Declaration.(AssertDeclaration)
+		assertD.Expression = e
+		s.Declaration = assertD
 	}
 	return s
 }
@@ -287,7 +287,8 @@ func NormalReader(b byte, state interface{}, decls []Declaration) (interface{}, 
 		}
 		var newDecl Declaration = NormalDeclaration{convertedState.LastWord, NullExpression{}, convertedState.CurrentWord != "_="}
 		if convertedState.CurrentWord == ":" {
-			newDecl = TypeDeclaration{convertedState.LastWord, NullExpression{}}
+			newDecl = AssertDeclaration{NullExpression{}}
+			convertedState.LastExpression = convertedState.Expression
 		}
 		newState := WhitespaceReaderState{NormalReaderState{NullExpression{}, NullExpression{}, nil, "", "", newDecl, nil}, NormalReader, NormalEOFFunction}
 		if convertedState.Declaration != nil {

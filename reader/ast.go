@@ -335,17 +335,16 @@ func (d ImportDeclaration) Summary() string {
 	return "{" + d.Name + " ..."
 }
 
-type TypeDeclaration struct {
-	Name string
+type AssertDeclaration struct {
 	Expression
 }
 
-func (d TypeDeclaration) Apply(dict DeclaredDict) {
-	if !core.ObjToType(d.Expression.ToObj(dict)).MatchesType(dict.GetObj(d.Name), 1000, core.MakeTypeMap()) {
-		panic("Type does not match")
+func (d AssertDeclaration) Apply(dict DeclaredDict) {
+	if !core.ObjToBool(d.Expression.ToObj(dict)) {
+		panic("Assertation failed")
 	}
 }
 
-func (d TypeDeclaration) Summary() string {
-	return d.Name + " : ..."
+func (d AssertDeclaration) Summary() string {
+	return ":..." // TODO kinda bad
 }

@@ -172,13 +172,3 @@ func ObjToIO(f Obj) IO {
 		}
 	}
 }
-
-func ObjToType(f Obj) Type {
-	isTup, val := ObjToEither(f)
-	if isTup {
-		a, b := ObjToTuple(val)
-		return MethodType{TBDType{a}, TBDType{b}}
-	} else {
-		return ArbitraryVal{ObjToInt(val)}
-	}
-}
