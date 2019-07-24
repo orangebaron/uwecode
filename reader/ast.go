@@ -334,17 +334,3 @@ func (d ImportDeclaration) Apply(dict DeclaredDict) {
 func (d ImportDeclaration) Summary() string {
 	return "{" + d.Name + " ..."
 }
-
-type AssertDeclaration struct {
-	Expression
-}
-
-func (d AssertDeclaration) Apply(dict DeclaredDict) {
-	if !core.ObjToBool(d.Expression.ToObj(dict)) {
-		panic("Assertation failed")
-	}
-}
-
-func (d AssertDeclaration) Summary() string {
-	return ":..." // TODO kinda bad
-}
