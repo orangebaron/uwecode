@@ -17,7 +17,6 @@ nand = and `combineThen not
 nor = or `combineThen not
 xor = \a \b or a b `and nand a b
 xnor = xor `combineThen not
-Bool->String = revRev "true" "false"
 [Either]
 left = \a \b const `id b a
 right = \a \b \c c a
@@ -66,6 +65,10 @@ sub_List = recursive \self \a \b bind_Maybe \head,tail
 		`id =Num 0 a
 			(head_Tup head,tail `,L self 0 (--Num b) `id tail_Tup head,tail)
 			`id self (--Num a) (--Num b) `id tail_Tup head,tail
+endlessSub_List = recursive \self \a bind_Maybe \head,tail
+	=Num 0 a
+		(head_Tup head,tail `,L self 0 `id tail_Tup head,tail)
+		`id self (--Num a) `id tail_Tup head,tail
 [SortedList]
 List->SortedList = \sortAlgo \> \== \l > `,T == `,T sortAlgo > == l
 get>_SortedList = head_Tup
@@ -82,7 +85,13 @@ getIndex_SortedList = \elem \sl SortedList->List sl `rev recursive \self \l
 						(self `id sub_List 0 pivotPoint l)
 						`id call_Maybe (+Num pivotPoint) `id self `id sub_List (++Num pivotPoint) (len_List l) l
 [String]
+Bool->String = revRev "true" "false"
+Either->String = \a \b revRev (a `then +List "left ") (b `then +List "right ")
+Maybe->String = \a revRev (a `then +List "just ") "none"
+Tup->String = \a \b rev \c \d a c `+List ", " `+List b d
 Num->String = rev true `id recursive \self \isFirstDigit \n (=0 n) (isFirstDigit "0" "") `id self false (n `/Num 10) `+List Maybe->List `id "0123456789" `@List n `%Num 10
+List->String = \a reduce_List (\elem \str str `+List ", " `+List a elem) "" `then endlessSub_List 2
+String->String = ,L '"' `then push_List '"'
 [IO]
 inp = left `then left
 otp = ,T `combineThen right `then left
