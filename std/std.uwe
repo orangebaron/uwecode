@@ -1,5 +1,5 @@
 [basic functions]
-id = \a a
+id = 1
 then = \a \b \c b `id a c
 combineThen = \a \b \c \d b `id a c d
 const = \a \b a
