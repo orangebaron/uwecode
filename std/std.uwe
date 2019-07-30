@@ -26,22 +26,11 @@ call_Either = \a \b b a a
 just = left
 none = 0
 call_Maybe = \a revRev (a `then just) none
+bind_Maybe = \a revRev a none
 [Tup]
 ,T = \a \b \c c a b
 head_Tup = rev true
 tail_Tup = rev false
-[List]
-,L = ,T `combineThen just
-head_List = call_Maybe head_Tup
-tail_List = call_Maybe tail_Tup `then revRev id 0
-Maybe->List = call_Maybe \a a `,T 0
-@List = \a \b head_List `id b tail_List a
-push_List = recursive \self \elem revRev (\head,tail head_Tup head,tail `,L self elem `id tail_Tup head,tail) `id elem `,L 0
-reduce_List = recursive \self \f \base \list list (\head,tail self f (f (head_Tup head,tail) base) `id tail_Tup head,tail) base
-reverse_List = reduce_List ,L 0
-filter_List = \f reduce_List (\elem \l (f elem) (elem `push_List l) l) 0
-map_List = \f reduce_List (\elem \l f elem `push_List l) 0
-+List = reduce_List push_List
 [Num]
 ++Num = \a \b b `then a b
 +Num = rev ++Num
@@ -58,6 +47,41 @@ shiftIncr_Tup _= tail_Tup `then \a a `,T ++Num a
 <Num = >=Num `combineThen not
 /Num = \a \b rev 0 `id recursive \self \n (*Num b n `>Num a) (--Num n) `id self `id ++Num n
 %Num = \a \b a `-Num b `*Num a `/Num b
+[List]
+,L = ,T `combineThen just
+head_List = call_Maybe head_Tup
+tail_List = call_Maybe tail_Tup `then revRev id 0
+Maybe->List = call_Maybe \a a `,T 0
+@List = \a \b head_List `id b tail_List a
+push_List = recursive \self \elem revRev (\head,tail head_Tup head,tail `,L self elem `id tail_Tup head,tail) `id elem `,L 0
+reduce_List = recursive \self \f \base \list list (\head,tail self f (f (head_Tup head,tail) base) `id tail_Tup head,tail) base
+reverse_List = reduce_List ,L 0
+filter_List = \f reduce_List (\elem \l (f elem) (elem `push_List l) l) 0
+map_List = \f reduce_List (\elem \l f elem `push_List l) 0
+len_List = recursive \self revRev (tail_Tup `then self `then ++Num) 0
++List = reduce_List push_List
+sub_List = recursive \self \a \b bind_Maybe \head,tail
+	=Num 0 b
+		none
+		`id =Num 0 a
+			(head_Tup head,tail `,L self 0 (--Num b) `id tail_Tup head,tail)
+			`id self (--Num a) (--Num b) `id tail_Tup head,tail
+[SortedList]
+List->SortedList = \sortAlgo \> \== \l > `,T == `,T sortAlgo > == l
+get>_SortedList = head_Tup
+get=_SortedList = tail_Tup `then head_Tup
+SortedList->List = 2 tail_Tup
+getIndex_SortedList = \elem \sl SortedList->List sl `rev recursive \self \l
+	=0 (len_List l)
+		none
+		`id ++Num (len_List l `/Num 2) `rev \pivotPoint
+			@List l pivotPoint `bind_Maybe \checkElem
+				get=_SortedList sl elem checkElem
+					(just pivotPoint)
+					`id get>_SortedList sl elem checkElem
+						(self `id sub_List 0 pivotPoint l)
+						`id call_Maybe (+Num pivotPoint) `id self `id sub_List (++Num pivotPoint) (len_List l) l
+[String]
 Num->String = rev true `id recursive \self \isFirstDigit \n (=0 n) (isFirstDigit "0" "") `id self false (n `/Num 10) `+List Maybe->List `id "0123456789" `@List n `%Num 10
 [IO]
 inp = left `then left
