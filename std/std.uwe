@@ -69,21 +69,10 @@ endlessSub_List = recursive \self \a bind_Maybe \head,tail
 	=Num 0 a
 		(head_Tup head,tail `,L self 0 `id tail_Tup head,tail)
 		`id self (--Num a) `id tail_Tup head,tail
-[SortedList]
-List->SortedList = \sortAlgo \> \== \l > `,T == `,T sortAlgo > == l
-get>_SortedList = head_Tup
-get=_SortedList = tail_Tup `then head_Tup
-SortedList->List = 2 tail_Tup
-getIndex_SortedList = \elem \sl SortedList->List sl `rev recursive \self \l
-	=0 (len_List l)
-		none
-		`id ++Num (len_List l `/Num 2) `rev \pivotPoint
-			@List l pivotPoint `bind_Maybe \checkElem
-				get=_SortedList sl elem checkElem
-					(just pivotPoint)
-					`id get>_SortedList sl elem checkElem
-						(self `id sub_List 0 pivotPoint l)
-						`id call_Maybe (+Num pivotPoint) `id self `id sub_List (++Num pivotPoint) (len_List l) l
+getIndex_List = \== \elem recursive \self bind_Maybe \head,tail
+	== elem (head_Tup head,tail)
+		(just 0)
+		`id call_Maybe ++Num `id self `id tail_Tup head,tail
 [String]
 Bool->String = revRev "true" "false"
 Either->String = \a \b revRev (a `then +List "left ") (b `then +List "right ")
