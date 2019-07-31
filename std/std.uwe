@@ -73,6 +73,14 @@ getIndex_List = \== \elem recursive \self bind_Maybe \head,tail
 	== elem (head_Tup head,tail)
 		(just 0)
 		`id call_Maybe ++Num `id self `id tail_Tup head,tail
+[Dict]
+make_Dict = \a revRev a 0
+@Dict = \dict \elem head_Tup dict `rev \== tail_Tup dict `rev recursive \self
+	bind_Maybe \head,tail
+		== elem (2 head_Tup head,tail)
+			(just `id tail_Tup `id head_Tup head,tail)
+			`id self `id tail_Tup head,tail
+insert_Dict = \a \b \dict head_Tup dict `,T ,T a b `,L tail_Tup dict
 [String]
 Bool->String = revRev "true" "false"
 Either->String = \a \b revRev (a `then +List "left ") (b `then +List "right ")
