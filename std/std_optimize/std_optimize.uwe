@@ -1,0 +1,4 @@
+{std/std}
+[form of an optimize thing: (num ,T num)->num ,T f->(f->str)->str]
+optDict = make_Dict `id =Tup =Num =Num
+optimize = @Dict `then ,T `then print

@@ -27,7 +27,7 @@ none = 0
 call_Maybe = \a revRev (a `then just) none
 bind_Maybe = \a revRev a none
 [Tup]
-,T = \a \b \c c a b
+,T = revRev
 head_Tup = rev true
 tail_Tup = rev false
 [Num]
@@ -74,7 +74,8 @@ getIndex_List = \== \elem recursive \self bind_Maybe \head,tail
 		(just 0)
 		`id call_Maybe ++Num `id self `id tail_Tup head,tail
 [Dict]
-make_Dict = \a revRev a 0
+make_Dict = \a a `,T 0
+List->Dict = ,T
 @Dict = \dict \elem head_Tup dict `rev \== tail_Tup dict `rev recursive \self
 	bind_Maybe \head,tail
 		== elem (2 head_Tup head,tail)
