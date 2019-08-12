@@ -1,4 +1,4 @@
 {std/std}
-[form of an optimize thing: (num ,T num)->num ,T f->(f->str)->str]
+[form of an optimize thing: list of: (num ,T num)->num ,T f->(f->str)->str ,T str]
 optDict = make_Dict `id =Tup =Num =Num
-optimize = @Dict `then ,T `then print
+optimize = @Dict `then 2 ,T
