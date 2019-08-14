@@ -9,11 +9,12 @@ func min(a uint, b uint) uint {
 		return a
 	}
 }
-func SimplifyUntil(f func(Obj) (bool, interface{}), obj Obj) interface{} {
-	for depth, newObj := uint(2), obj.Simplify(1); ; depth = min(depth+1, maxDepth) {
+func SimplifyUntilNoPanic(f func(Obj) (bool, interface{}), obj Obj) (bool, interface{}) {
+	newObj := obj.Simplify(1)
+	for depth := uint(2); ; depth = min(depth+1, maxDepth) {
 		isGood, val := f(newObj)
 		if isGood {
-			return val
+			return true, val
 		} else {
 			obj = newObj
 			newObj = obj.Simplify(depth)
@@ -26,5 +27,13 @@ func SimplifyUntil(f func(Obj) (bool, interface{}), obj Obj) interface{} {
 			}
 		}
 	}
-	panic("Failed to simplify to expected value")
+	return false, newObj
+}
+func SimplifyUntil(f func(Obj) (bool, interface{}), obj Obj) interface{} {
+	b, val := SimplifyUntilNoPanic(f, obj)
+	if !b {
+		panic("Failed to simplify to expected value")
+	} else {
+		return val
+	}
 }

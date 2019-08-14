@@ -94,7 +94,7 @@ func (f Called) Simplify(depth uint) Obj {
 	if depth == 0 {
 		return f
 	}
-	v := f.X.Call(f.Y)
+	v := f.X.Call(f.Y.Simplify(depth - 1))
 	if v != f {
 		v = v.Simplify(depth - 1)
 	}
