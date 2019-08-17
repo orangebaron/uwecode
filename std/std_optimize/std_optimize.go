@@ -66,3 +66,44 @@ func ObjMatchesForm(obj core.Obj, form func(uint, uint) (bool, uint)) bool {
 		}
 	}
 }
+
+func ObjToForm(obj core.Obj) func(uint, uint) (bool, uint) {
+	return func(a uint, b uint) (bool, uint) {
+		defer func() { recover() }()
+		return true, core.ObjToInt(obj.Call(core.ChurchNum{a}).Call(core.ChurchNum{b}))
+	}
+}
+
+type ObjToStringObj struct {
+	F func(core.Obj) string
+}
+
+func (f ObjToStringObj) Call(a core.Obj) core.Obj {
+	return core.ChurchTupleCharString{f.F(a)}
+}
+func (f ObjToStringObj) Simplify(_ uint) core.Obj                        { return f }
+func (f ObjToStringObj) Replace(_ uint, _ core.Obj) core.Obj             { return f }
+func (f ObjToStringObj) GetUnboundVars(_ map[uint]bool, _ map[uint]bool) {}
+func (f ObjToStringObj) GetAllVars(_ map[uint]bool)                      {}
+func (f ObjToStringObj) ReplaceBindings(_ map[uint]bool) core.Obj        { return f }
+
+func ObjToConversion(obj core.Obj) func(core.Obj, func(core.Obj) string) string {
+	return func(a core.Obj, f func(core.Obj) string) string {
+		return core.ObjToString(obj.Call(a).Call(ObjToStringObj{f}))
+	}
+}
+
+func ObjToOptimization(obj core.Obj) Optimization {
+	formObj, tail := core.ObjToTuple(obj)
+	conversionObj, extraTextObj := core.ObjToTuple(tail)
+	return Optimization{ObjToForm(formObj), ObjToConversion(conversionObj), core.ObjToString(extraTextObj)}
+}
+
+func ObjToOptimizationList(obj core.Obj) []Optimization {
+	list := core.ObjToList(obj)
+	returnVal := make([]Optimization, len(list))
+	for k, v := range list {
+		returnVal[k] = ObjToOptimization(v)
+	}
+	return returnVal
+}
