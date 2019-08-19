@@ -3,42 +3,68 @@ package std_optimize
 import "../../core"
 import "fmt"
 
+type Form struct {
+	CallTable func(uint, uint) (bool, uint)
+	AcceptibleVals func(uint) bool
+}
 type Optimization struct {
-	Form           func(uint, uint) (bool, uint)
+	Form
 	ConversionFunc func(core.Obj, func(core.Obj) string) string
 	ExtraText      string
+	Imports []string
 }
 
-func OptimizeObj(opts []*Optimization, optsUsed map[*Optimization]bool, obj core.Obj) string {
+func OptimizeObjHelper(opts []*Optimization, optsUsed map[*Optimization]bool, obj core.Obj) string {
 	for _, opt := range opts {
 		if ObjMatchesForm(obj, opt.Form) {
 			optsUsed[opt] = true
-			return opt.ConversionFunc(obj, func(a core.Obj) string { return OptimizeObj(opts, optsUsed, a) })
+			return opt.ConversionFunc(obj, func(a core.Obj) string { return OptimizeObjHelper(opts, optsUsed, a) })
 		}
 	}
 	switch v := obj.(type) {
 	case core.Function:
-		return fmt.Sprintf("core.Function{%d,%s}", v.N, OptimizeObj(opts, optsUsed, v.X))
+		return fmt.Sprintf("core.Function{%d,%s}", v.N, OptimizeObjHelper(opts, optsUsed, v.X))
 	case core.Called:
-		return fmt.Sprintf("core.Called{%s,%s}", OptimizeObj(opts, optsUsed, v.X), OptimizeObj(opts, optsUsed, v.Y))
+		return fmt.Sprintf("core.Called{%s,%s}", OptimizeObjHelper(opts, optsUsed, v.X), OptimizeObjHelper(opts, optsUsed, v.Y))
 	case core.CalledChurchNum:
-		return fmt.Sprintf("core.CalledChurchNum{%d,%s}", v.Num, OptimizeObj(opts, optsUsed, v.X))
+		return fmt.Sprintf("core.CalledChurchNum{%d,%s}", v.Num, OptimizeObjHelper(opts, optsUsed, v.X))
 	default:
 		return fmt.Sprintf("%#v", obj)
 	}
 }
 
+func OptimizeObj(opts []*Optimization, obj core.Obj) (string, string) {
+	optsUsed := make(map[*Optimization]bool)
+	mainString := OptimizeObjHelper(opts, optsUsed, obj)
+	headerString := ""
+	importsUsed := make(map[string]bool)
+	for opt, wasUsed := range optsUsed {
+		if wasUsed {
+			headerString += opt.ExtraText + ";"
+			for _, imp := range opt.Imports {
+				importsUsed[imp] = true
+			}
+		}
+	}
+	for imp, _ := range importsUsed {
+		headerString = fmt.Sprintf("import \"%s\";", imp) + headerString
+	}
+	return headerString, mainString
+}
+
 type FormTestArbitraryVal struct {
 	Val  uint
-	Form func(uint, uint) (bool, uint)
+	*Form
 }
 
 func (f FormTestArbitraryVal) Call(a core.Obj) core.Obj {
 	arb, isArb := a.(FormTestArbitraryVal)
 	if isArb {
-		b, val := f.Form(f.Val, arb.Val)
+		b, val := f.Form.CallTable(f.Val, arb.Val)
 		if b {
 			return FormTestArbitraryVal{val, f.Form}
+		} else {
+			panic("No value in calltable")
 		}
 	}
 	return core.Called{f, a}
@@ -49,15 +75,36 @@ func (f FormTestArbitraryVal) GetUnboundVars(_ map[uint]bool, _ map[uint]bool) {
 func (f FormTestArbitraryVal) GetAllVars(_ map[uint]bool)                      {}
 func (f FormTestArbitraryVal) ReplaceBindings(_ map[uint]bool) core.Obj        { return f }
 
-func ObjMatchesFormHelper(obj core.Obj) (bool, interface{}) {
-	arb, isArb := obj.(FormTestArbitraryVal)
-	return isArb, arb.Val == 0
+func IsJustArbsCalledsAndReturnVals(obj core.Obj) bool {
+	switch v := obj.(type) {
+	case core.Called:
+		return IsJustArbsCalledsAndReturnVals(v.X) && IsJustArbsCalledsAndReturnVals(v.Y)
+	case core.ReturnVal:
+		return true
+	case FormTestArbitraryVal:
+		return true
+	default:
+		return false
+	}
 }
 
-func ObjMatchesForm(obj core.Obj, form func(uint, uint) (bool, uint)) bool {
-	defer func() { recover() }()
+func ObjMatchesFormHelper(obj core.Obj) (bool, interface{}) {
+	arb, isArb := obj.(FormTestArbitraryVal)
+	if isArb {
+		return true, arb.Form.AcceptibleVals(arb.Val)
+	} else if IsJustArbsCalledsAndReturnVals(obj) {
+		return true, false
+	} else {
+		return false, nil
+	}
+}
+
+func ObjMatchesForm(obj core.Obj, form Form) bool {
+	defer func() {
+		recover()
+	}()
 	for i := uint(1); ; i++ {
-		obj = obj.Call(FormTestArbitraryVal{i, form}) // TODO make a new absoluteval type
+		obj = obj.Call(FormTestArbitraryVal{i, &form})
 		b, val := core.SimplifyUntilNoPanic(ObjMatchesFormHelper, obj)
 		if b {
 			return val.(bool)
@@ -67,11 +114,16 @@ func ObjMatchesForm(obj core.Obj, form func(uint, uint) (bool, uint)) bool {
 	}
 }
 
-func ObjToForm(obj core.Obj) func(uint, uint) (bool, uint) {
-	return func(a uint, b uint) (bool, uint) {
+func ObjToForm(obj core.Obj) Form {
+	head, tail := core.ObjToTuple(obj)
+	return Form{ func(a uint, b uint) (bool, uint) {
 		defer func() { recover() }()
-		return true, core.ObjToInt(obj.Call(core.ChurchNum{a}).Call(core.ChurchNum{b}))
-	}
+		return true, core.ObjToInt(head.Call(core.ChurchNum{a}).Call(core.ChurchNum{b}))
+	},
+	func(a uint) bool {
+		defer func() {recover()}()
+		return core.ObjToBool(tail.Call(core.ChurchNum{a}))
+	}}
 }
 
 type ObjToStringObj struct {
@@ -93,15 +145,22 @@ func ObjToConversion(obj core.Obj) func(core.Obj, func(core.Obj) string) string 
 	}
 }
 
-func ObjToOptimization(obj core.Obj) Optimization {
+func ObjToOptimization(obj core.Obj) *Optimization {
 	formObj, tail := core.ObjToTuple(obj)
-	conversionObj, extraTextObj := core.ObjToTuple(tail)
-	return Optimization{ObjToForm(formObj), ObjToConversion(conversionObj), core.ObjToString(extraTextObj)}
+	conversionObj, tail2 := core.ObjToTuple(tail)
+	extraTextObj, importsObj := core.ObjToTuple(tail2)
+	importsObjList := core.ObjToList(importsObj)
+	imports := make([]string, len(importsObjList))
+	for i, strObj := range importsObjList {
+		imports[i] = core.ObjToString(strObj)
+	}
+	returnVal := Optimization{ObjToForm(formObj), ObjToConversion(conversionObj), core.ObjToString(extraTextObj), imports}
+	return &returnVal
 }
 
-func ObjToOptimizationList(obj core.Obj) []Optimization {
+func ObjToOptimizationList(obj core.Obj) []*Optimization {
 	list := core.ObjToList(obj)
-	returnVal := make([]Optimization, len(list))
+	returnVal := make([]*Optimization, len(list))
 	for k, v := range list {
 		returnVal[k] = ObjToOptimization(v)
 	}
