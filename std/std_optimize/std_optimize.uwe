@@ -1,5 +1,0 @@
-{std/std}
-[form of an optimize thing: list of: ((num ,T num)->num ,T num->bool) ,T f->(f->str)->str ,T str ,T list str]
-[todo: this library is trash]
-optDict = make_Dict `id =Tup =Num =Num
-optimize = @Dict `then 2 ,T
