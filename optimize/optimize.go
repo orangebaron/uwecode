@@ -4,10 +4,10 @@ import "./core"
 import "fmt"
 
 type Optimization struct {
-	Form func(core.Obj) bool
+	Form           func(core.Obj) bool
 	ConversionFunc func(core.Obj, func(core.Obj) string) string
 	ExtraText      string
-	Imports []string
+	Imports        []string
 }
 
 func OptimizeObjHelper(opts []*Optimization, optsUsed map[*Optimization]bool, obj core.Obj) string {
