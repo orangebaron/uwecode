@@ -40,13 +40,27 @@ func makeGoFile(filename string, importStrings []string) error {
 	return nil
 }
 
-func runCmdNicely(cmd *exec.Cmd) error {
-	_, err := cmd.Output()
+func runCmdNicely(cmd *exec.Cmd) (string, error) {
+	s, err := cmd.Output()
 	if exitErr, isExitErr := err.(*exec.ExitError); isExitErr {
-		return errors.New(string(exitErr.Stderr) + "\n" + err.Error())
+		return s, errors.New(string(exitErr.Stderr) + "\n" + err.Error())
 	} else {
-		return err
+		return s, err
 	}
+}
+
+func makeGoOptimizeFile(obj core.Obj) error {
+	str := fmt.Sprintf("import ./optimize\n\nfunc main() {\n\tfmt.Println(optimize.ASDF(%#v, %s))\n}\n", obj, opts)
+	err := ioutil.WriteFile(filename, []byte(str), 0644)
+}
+
+func optimizeObj(obj core.Obj, tempFilename string, optimizations []optimize.Optimization) string {
+	err := makeGoOptimizeFile(obj, tempFilename, optimizations)
+	if err != nil {
+		return "", err
+	}
+	otp, err := runCmdNicely(exec.Command("go", "run", filename))
+	return otp, err
 }
 
 func buildFile(filename string, importStrings []string) error {
