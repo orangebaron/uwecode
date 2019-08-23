@@ -1,6 +1,8 @@
 package main
 
 import "../reader"
+import "../core"
+import "../optimize"
 import "os"
 import "io/ioutil"
 import "fmt"
@@ -27,6 +29,9 @@ func makeGoFile(filename string, importStrings []string) error {
 		return err
 	}
 	mainObj := dict.GetObj("main") // TODO: this can panic
+	a, err := optimizeObj(mainObj, filename, []optimize.Optimization{})
+	fmt.Println(a, err)
+	panic("asdf")
 	goifiedImportString := ""
 	for _, v := range importStrings {
 		goifiedImportString += "import\"" + v + "\"\n"
@@ -43,32 +48,31 @@ func makeGoFile(filename string, importStrings []string) error {
 func runCmdNicely(cmd *exec.Cmd) (string, error) {
 	s, err := cmd.Output()
 	if exitErr, isExitErr := err.(*exec.ExitError); isExitErr {
-		return s, errors.New(string(exitErr.Stderr) + "\n" + err.Error())
-	} else {
-		return s, err
+		return string(s), errors.New(string(exitErr.Stderr) + "\n" + err.Error())
 	}
+	return string(s), err
 }
 
-func makeGoOptimizeFile(obj core.Obj) error {
-	str := fmt.Sprintf("import ./optimize\n\nfunc main() {\n\tfmt.Println(optimize.ASDF(%#v, %s))\n}\n", obj, opts)
-	err := ioutil.WriteFile(filename, []byte(str), 0644)
+func makeGoOptimizeFile(obj core.Obj, filename string, opts []optimize.Optimization) error {
+	str := fmt.Sprintf("package main\n\nimport \"./optimize\"\n\nfunc main() {\n\tfmt.Println(optimize.OptimizeObj(%#v, %s))\n}\n", obj, opts)
+	return ioutil.WriteFile(filename+".go", []byte(str), 0644)
 }
 
-func optimizeObj(obj core.Obj, tempFilename string, optimizations []optimize.Optimization) string {
-	err := makeGoOptimizeFile(obj, tempFilename, optimizations)
+func optimizeObj(obj core.Obj, filename string, optimizations []optimize.Optimization) (string, error) {
+	err := makeGoOptimizeFile(obj, filename, optimizations)
 	if err != nil {
 		return "", err
 	}
-	otp, err := runCmdNicely(exec.Command("go", "run", filename))
+	otp, err := runCmdNicely(exec.Command("go", "run", filename+".go"))
 	return otp, err
 }
 
 func buildFile(filename string, importStrings []string) error {
-	err := makeGoFile(filename, importStrings)
+	err := makeGoFile(filename+".go", importStrings)
 	if err != nil {
 		return err
 	}
-	err = runCmdNicely(exec.Command("go", "build", filename+".go"))
+	_, err = runCmdNicely(exec.Command("go", "build", filename+".go"))
 	if err != nil {
 		return err
 	}
@@ -81,7 +85,7 @@ func runFile(filename string, importStrings []string) error {
 	if err != nil {
 		return err
 	}
-	err = runCmdNicely(exec.Command("go", "build", filename+".go"))
+	_, err = runCmdNicely(exec.Command("go", "build", filename+".go"))
 	if err != nil {
 		return err
 	}

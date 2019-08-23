@@ -1,6 +1,6 @@
 package optimize
 
-import "./core"
+import "../core"
 import "fmt"
 
 type Optimization struct {
@@ -27,4 +27,23 @@ func OptimizeObjHelper(opts []*Optimization, optsUsed map[*Optimization]bool, ob
 	default:
 		return fmt.Sprintf("%#v", obj)
 	}
+}
+
+func OptimizeObj(opts []*Optimization, obj core.Obj) (string, string) {
+	optsUsed := make(map[*Optimization]bool)
+	mainString := OptimizeObjHelper(opts, optsUsed, obj)
+	headerString := ""
+	importsUsed := make(map[string]bool)
+	for opt, wasUsed := range optsUsed {
+		 if wasUsed {
+			  headerString += opt.ExtraText + ";"
+			  for _, imp := range opt.Imports {
+				   importsUsed[imp] = true
+			  }
+		 }
+	}
+	for imp, _ := range importsUsed {
+		 headerString = fmt.Sprintf("import \"%s\";", imp) + headerString
+	}
+	return headerString, mainString
 }
