@@ -29,15 +29,13 @@ func makeGoFile(filename string, importStrings []string) error {
 		return err
 	}
 	mainObj := dict.GetObj("main") // TODO: this can panic
-	a, err := optimizeObj(mainObj, filename, []optimize.Optimization{})
-	fmt.Println(a, err)
-	panic("asdf")
-	goifiedImportString := ""
+	head, optimizedObj, err := optimizeObj(mainObj, filename, []*optimize.Optimization{})
+	goifiedImportString := "" //TODO: can create duplicates with optimizer
 	for _, v := range importStrings {
 		goifiedImportString += "import\"" + v + "\"\n"
 	}
 	projNameSplit := strings.Split(importStrings[0], "/")
-	str := fmt.Sprintf("package main\n\nimport \"./core\"\n%s\nvar mainObj core.Obj = %#v\n\nfunc main() {\n\tcore.RunProcess(mainObj, %s.NewController(), make(chan struct{}))\n}", goifiedImportString, mainObj, projNameSplit[len(projNameSplit)-1]) // TODO: ./core -> github link
+	str := fmt.Sprintf("package main\n\nimport \"./core\"\n%s\nvar mainObj core.Obj = %s\n\n%s\n\nfunc main() {\n\tcore.RunProcess(mainObj, %s.NewController(), make(chan struct{}))\n}", goifiedImportString, head, optimizedObj, projNameSplit[len(projNameSplit)-1]) // TODO: ./core -> github link
 	err = ioutil.WriteFile(filename+".go", []byte(str), 0644)
 	if err != nil {
 		return err
@@ -53,18 +51,38 @@ func runCmdNicely(cmd *exec.Cmd) (string, error) {
 	return string(s), err
 }
 
-func makeGoOptimizeFile(obj core.Obj, filename string, opts []optimize.Optimization) error {
-	str := fmt.Sprintf("package main\n\nimport \"./optimize\"\n\nfunc main() {\n\tfmt.Println(optimize.OptimizeObj(%#v, %s))\n}\n", obj, opts)
+func makeGoOptimizeFile(obj core.Obj, filename string, opts []*optimize.Optimization) error {
+	str := fmt.Sprintf("package main\n\nimport \"os\"\nimport \"fmt\"\nimport \"./core\"\nimport \"./optimize\"\n\nvar mainObj core.Obj = %#v\nvar opts []*optimize.Optimization = %#v\n\nfunc main() {\n\ta, b := optimize.OptimizeObj(opts, mainObj)\n\tfmt.Println(a)\n\tfmt.Fprintln(os.Stderr, b)\n}\n", obj, opts)
 	return ioutil.WriteFile(filename+".go", []byte(str), 0644)
 }
 
-func optimizeObj(obj core.Obj, filename string, optimizations []optimize.Optimization) (string, error) {
-	err := makeGoOptimizeFile(obj, filename, optimizations)
+func optimizeObj(obj core.Obj, filename string, opts []*optimize.Optimization) (string, string, error) {
+	err := makeGoOptimizeFile(obj, filename, opts)
 	if err != nil {
-		return "", err
+		return "", "", err
 	}
-	otp, err := runCmdNicely(exec.Command("go", "run", filename+".go"))
-	return otp, err
+	cmd := exec.Command("go", "run", filename+".go")
+	stdout, err := cmd.StdoutPipe()
+	if err != nil {
+		return "", "", err
+	}
+	stderr, err := cmd.StderrPipe()
+	if err != nil {
+		return "", "", err
+	}
+	err = cmd.Start()
+	if err != nil {
+		return "", "", err
+	}
+	head, err := ioutil.ReadAll(stdout)
+	if err != nil {
+		return "", "", err
+	}
+	optimizedObj, err := ioutil.ReadAll(stderr)
+	if err != nil {
+		return "", "", err
+	}
+	return string(head), string(optimizedObj), err
 }
 
 func buildFile(filename string, importStrings []string) error {
