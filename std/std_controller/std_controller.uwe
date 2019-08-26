@@ -1,4 +1,4 @@
-{std/std}
+{std/std _}
 otp_Tup _= \a \b otp `id a `,T b
 otpInp  _= \n \v inp `then otp_Tup n v
 getPid   = otpInp 0 0

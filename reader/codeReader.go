@@ -100,6 +100,7 @@ const (
 	ImportAfterJustName
 	ImportAfterAs
 	ImportAfterAsName
+	ImportAfterPrivate
 )
 
 type ImportReaderState struct {
@@ -120,43 +121,48 @@ func (s ImportReaderState) EndOfWord() ImportReaderState {
 			s.LocInImport = ImportAfterName
 		case ImportAfterName:
 			switch s.CurrentWord {
-			case "public":
-				if s.ImportDeclaration.Public {
-					panic("said public twice in the same import")
-				} else {
-					s.ImportDeclaration.Public = true
-				}
-			case "prefixed":
+			case "_":
+				s.LocInImport = ImportAfterPrivate
+				s.ImportDeclaration.Public = false
+			case "+":
 				s.LocInImport = ImportAfterPrefixed
-			case "just":
+			case ":":
 				s.LocInImport = ImportAfterJust
+			case "_:":
+				s.LocInImport = ImportAfterJust
+				s.ImportDeclaration.Public = false
 			default:
-				panic("expected \"public\", \"prefixed\", \"just\", or end of import")
+				panic("expected \"_\", \"+\", \":\", \"_:\", or end of import")
 			}
 		case ImportAfterPrefixed:
 			s.ImportDeclaration.Aliases[""] = s.CurrentWord
 			s.LocInImport = ImportAfterPrefixedName
 		case ImportAfterPrefixedName:
-			if s.CurrentWord == "just" {
+			if s.CurrentWord == ":" || s.CurrentWord == "_:" {
 				s.LocInImport = ImportAfterJust
+				s.ImportDeclaration.Public = s.CurrentWord == ":"
+			} else if s.CurrentWord == "_" {
+				s.LocInImport = ImportAfterPrivate
 			} else {
-				panic("expected \"just\" or end of import")
+				panic("expected \"_:\", \":\", or end of import")
 			}
 		case ImportAfterJust:
 			s.ImportDeclaration.ToImport = append(s.ImportDeclaration.ToImport, s.CurrentWord)
 			s.LocInImport = ImportAfterJustName
 		case ImportAfterJustName:
 			switch s.CurrentWord {
-			case "as":
+			case "->":
 				s.LocInImport = ImportAfterAs
-			case "and":
+			case ",":
 				s.LocInImport = ImportAfterJust
 			default:
-				panic("expected \"as\", \"and\", or end of import")
+				panic("expected \"->\", \",\", or end of import")
 			}
 		case ImportAfterAs:
 			s.ImportDeclaration.Aliases[s.ImportDeclaration.ToImport[len(s.ImportDeclaration.ToImport)-1]] = s.CurrentWord
 			s.LocInImport = ImportAfterAsName
+		case ImportAfterPrivate:
+			panic("expected end of import")
 		default:
 			panic("unknown LocInImport")
 		}
@@ -167,7 +173,7 @@ func (s ImportReaderState) EndOfWord() ImportReaderState {
 
 func (s ImportReaderState) ValidFinish() bool {
 	l := s.LocInImport
-	return l == ImportAfterName || l == ImportAfterPrefixedName || l == ImportAfterJustName || l == ImportAfterAsName
+	return l == ImportAfterName || l == ImportAfterPrefixedName || l == ImportAfterJustName || l == ImportAfterAsName || l == ImportAfterPrivate
 }
 
 func ImportReader(b byte, state interface{}, decls []Declaration) (interface{}, []Declaration, CharacterReader, EOFFunction) {
@@ -323,7 +329,7 @@ func NormalReader(b byte, state interface{}, decls []Declaration) (interface{}, 
 				convertedState.NormalDeclaration.Expression = convertedState.Expression
 				decls = append(decls, convertedState.NormalDeclaration)
 			}
-			return ImportReaderState{ImportStart, false, "", ImportDeclaration{false, "", []string{}, make(map[string]string)}}, decls, ImportReader, ErrorEOFFunction
+			return ImportReaderState{ImportStart, false, "", ImportDeclaration{true, "", []string{}, make(map[string]string)}}, decls, ImportReader, ErrorEOFFunction
 		} else if contains("\"'", b) {
 			return StringLiteralReaderState{convertedState.HighestEnclosing(), "", b == '\'', Unescaped, byte(0)}, decls, StringLiteralReader, ErrorEOFFunction
 		} else if isSpecial {

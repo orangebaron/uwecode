@@ -1,4 +1,4 @@
-{std/std public just id and stop}
-{std/std just left and right and otp and then}
+{std/std : id , stop}
+{std/std _: left , right , otp , then}
 controller = right `then otp
 import = left `then otp
