@@ -2,7 +2,6 @@ package main
 
 import "../reader"
 import "../core"
-import "../optimize"
 import "os"
 import "io/ioutil"
 import "fmt"
@@ -29,13 +28,16 @@ func makeGoFile(filename string, importStrings []string) error {
 		return err
 	}
 	mainObj := dict.GetObj("main") // TODO: this can panic
-	head, optimizedObj, err := optimizeObj(mainObj, filename, []*optimize.Optimization{})
+	head, optimizedObj, err := optimizeObj(mainObj, filename)
+	if err != nil {
+		return err
+	}
 	goifiedImportString := "" //TODO: can create duplicates with optimizer
 	for _, v := range importStrings {
 		goifiedImportString += "import\"" + v + "\"\n"
 	}
 	projNameSplit := strings.Split(importStrings[0], "/")
-	str := fmt.Sprintf("package main\n\nimport \"./core\"\n%s\nvar mainObj core.Obj = %s\n\n%s\n\nfunc main() {\n\tcore.RunProcess(mainObj, %s.NewController(), make(chan struct{}))\n}", goifiedImportString, head, optimizedObj, projNameSplit[len(projNameSplit)-1]) // TODO: ./core -> github link
+	str := fmt.Sprintf("package main\n\nimport \"./core\"\n%s\nvar mainObj core.Obj = %s\n\n%s\n\nfunc main() {\n\tcore.RunProcess(mainObj, %s.NewController(), make(chan struct{}))\n}\n", goifiedImportString, head, optimizedObj, projNameSplit[len(projNameSplit)-1]) // TODO: ./core -> github link
 	err = ioutil.WriteFile(filename+".go", []byte(str), 0644)
 	if err != nil {
 		return err
@@ -51,13 +53,37 @@ func runCmdNicely(cmd *exec.Cmd) (string, error) {
 	return string(s), err
 }
 
-func makeGoOptimizeFile(obj core.Obj, filename string, opts []*optimize.Optimization) error {
-	str := fmt.Sprintf("package main\n\nimport \"os\"\nimport \"fmt\"\nimport \"./core\"\nimport \"./optimize\"\n\nvar mainObj core.Obj = %#v\nvar opts []*optimize.Optimization = %#v\n\nfunc main() {\n\ta, b := optimize.OptimizeObj(opts, mainObj)\n\tfmt.Println(a)\n\tfmt.Fprintln(os.Stderr, b)\n}\n", obj, opts)
+func makeOptimizeGoOpts() string {
+	defaultString := "var opts = []*optimize.Optimization{}"
+	files, err := ioutil.ReadDir("./.uwe/opts")
+	if err != nil {
+		return defaultString
+	}
+	importsStr := ""
+	optsStr := ""
+	for _, f := range files {
+		name := f.Name()
+		importsStr += fmt.Sprintf("import \"./.uwe/opts/%s\"\n", name)
+		if optsStr != "" {
+			optsStr += " + "
+		}
+		optsStr += name + ".OptsList"
+	}
+	if optsStr == "" {
+		return defaultString
+	} else {
+		return importsStr + "\nvar opts = " + optsStr
+	}
+}
+
+func makeGoOptimizeFile(obj core.Obj, filename string) error {
+	optsStr := makeOptimizeGoOpts()
+	str := fmt.Sprintf("package main\n\nimport \"os\"\nimport \"fmt\"\nimport \"./core\"\nimport \"./optimize\"\n%s\nvar mainObj core.Obj = %#v\n\nfunc main() {\n\ta, b := optimize.OptimizeObj(opts, mainObj)\n\tfmt.Println(a)\n\tfmt.Fprintln(os.Stderr, b)\n}\n", optsStr, obj)
 	return ioutil.WriteFile(filename+".go", []byte(str), 0644)
 }
 
-func optimizeObj(obj core.Obj, filename string, opts []*optimize.Optimization) (string, string, error) {
-	err := makeGoOptimizeFile(obj, filename, opts)
+func optimizeObj(obj core.Obj, filename string) (string, string, error) {
+	err := makeGoOptimizeFile(obj, filename)
 	if err != nil {
 		return "", "", err
 	}
