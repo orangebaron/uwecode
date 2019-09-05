@@ -6,8 +6,7 @@ import "fmt"
 type Optimization struct {
 	Form           func(core.Obj) bool
 	ConversionFunc func(core.Obj, func(core.Obj) string) string
-	ExtraText      string
-	Imports        []string
+	Import         string
 }
 
 func OptimizeObjHelper(opts []*Optimization, optsUsed map[*Optimization]bool, obj core.Obj) string {
@@ -35,15 +34,14 @@ func OptimizeObj(opts []*Optimization, obj core.Obj) (string, string) {
 	headerString := ""
 	importsUsed := make(map[string]bool)
 	for opt, wasUsed := range optsUsed {
-		 if wasUsed {
-			  headerString += opt.ExtraText + ";"
-			  for _, imp := range opt.Imports {
-				   importsUsed[imp] = true
-			  }
-		 }
+		if wasUsed {
+			importsUsed[opt.Import] = true
+		}
 	}
 	for imp, _ := range importsUsed {
-		 headerString = fmt.Sprintf("import \"%s\";", imp) + headerString
+		if imp != "" {
+			headerString = fmt.Sprintf("import \"%s\"\n", imp) + headerString
+		}
 	}
 	return headerString, mainString
 }
