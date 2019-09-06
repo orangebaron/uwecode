@@ -4,16 +4,16 @@ import "../core"
 import "fmt"
 
 type Optimization struct {
-	Form           func(core.Obj) bool
 	ConversionFunc func(core.Obj, func(core.Obj) string) string
 	Import         string
 }
 
 func OptimizeObjHelper(opts []*Optimization, optsUsed map[*Optimization]bool, obj core.Obj) string {
 	for _, opt := range opts {
-		if opt.Form(obj) {
+		str := opt.ConversionFunc(obj, func(a core.Obj) string { return OptimizeObjHelper(opts, optsUsed, a) })
+		if str != "" {
 			optsUsed[opt] = true
-			return opt.ConversionFunc(obj, func(a core.Obj) string { return OptimizeObjHelper(opts, optsUsed, a) })
+			return str
 		}
 	}
 	switch v := obj.(type) {
@@ -40,7 +40,7 @@ func OptimizeObj(opts []*Optimization, obj core.Obj) (string, string) {
 	}
 	for imp, _ := range importsUsed {
 		if imp != "" {
-			headerString = fmt.Sprintf("import \"%s\"\n", imp) + headerString
+			headerString += fmt.Sprintf("import \"%s\"\n", imp)
 		}
 	}
 	return headerString, mainString
