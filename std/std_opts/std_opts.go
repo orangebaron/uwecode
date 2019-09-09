@@ -52,6 +52,50 @@ func MakeObjList(objs []core.Obj) core.Obj {
 	return ObjList{&objs}
 }
 
+func incOptHelper(f core.Obj) (bool, interface{}) {
+	called1, isCalled1 := f.(core.Called)
+	if !isCalled1 { return false, nil }
+	arb1, isArb1 := called1.X.(core.ArbitraryVal)
+	if !isArb1 || arb1.ID != 1 { return false, nil }
+	called2, isCalled2 := called1.Y.(core.Called)
+	if !isCalled2 { return false, nil }
+	arb2, isArb2 := called2.X.(core.ArbitraryVal)
+	if !isArb2 || arb2.ID != 0 { return false, nil }
+	called3, isCalled3 := called2.Y.(core.Called)
+	if !isCalled3 { return false, nil }
+	arb3, isArb3 := called3.X.(core.ArbitraryVal)
+	if !isArb3 || arb3.ID != 1 { return false, nil }
+	arb4, isArb4 := called3.Y.(core.ArbitraryVal)
+	if !isArb4 || arb4.ID != 2 { return false, nil }
+	return true, nil
+}
+
+func plusOptHelper(f core.Obj) (bool, interface{}) {
+	called, isCalled := f.(core.Called)
+	if !isCalled { return false, nil }
+	arb, isArb := f.(core.ArbitraryVal)
+	if !isArb || arb.ID != 3 { return false, nil }
+	defer func() { recover() }()
+	core.SimplifyUntil(incOptHelper, called.Y.Call(core.ArbitraryVal{0}).Call(core.ArbitraryVal{1}).Call(core.ArbitraryVal{2}))
+	return true, nil
+}
+
+func multOptHelper(f core.Obj) (bool, interface{}) {
+	defer func() { recover() }()
+	called1, isCalled1 := f.(core.Called)
+	if !isCalled1 || core.ObjToInt(called1.Y) != 0 { return false, nil }
+	called2, isCalled2 := called1.X.(core.Called)
+	if !isCalled2 { return false, nil }
+	arb1, isArb1 := called2.X.(core.ArbitraryVal)
+	if !isArb1 || arb1.ID != 5 { return false, nil }
+	called3, isCalled3 := called2.Y.(core.Called)
+	if !isCalled3 { return false, nil }
+	arb2, isArb2 := called3.X.(core.ArbitraryVal)
+	if !isArb2 || arb2.ID != 4 { return false, nil }
+	core.SimplifyUntil(plusOptHelper, called3.Y.Call(core.ArbitraryVal{3}))
+	return true, nil
+}
+
 var listOpt optimize.Optimization = optimize.Optimization{
 	func(f core.Obj, convert func(core.Obj) string) string {
 		defer func() { recover() }()
@@ -64,4 +108,32 @@ var listOpt optimize.Optimization = optimize.Optimization{
 	},
 	"./.uwe/opts/std_opts",
 }
-var OptsList []*optimize.Optimization = []*optimize.Optimization{&listOpt}
+
+var incOpt optimize.Optimization = optimize.Optimization{
+	func(f core.Obj, convert func(core.Obj) string) string {
+		defer func() { recover() }()
+		core.SimplifyUntil(incOptHelper, f.Call(core.ArbitraryVal{0}).Call(core.ArbitraryVal{1}).Call(core.ArbitraryVal{2}))
+		return "std_opts.NumOpt{std_opts.Inc}"
+	},
+	"./.uwe/opts/std_opts",
+}
+
+var plusOpt optimize.Optimization = optimize.Optimization{
+	func(f core.Obj, convert func(core.Obj) string) string {
+		defer func() { recover() }()
+		core.SimplifyUntil(plusOptHelper, f.Call(core.ArbitraryVal{0}).Call(core.ArbitraryVal{1}))
+		return "std_opts.NumOpt{std_opts.Plus}"
+	},
+	"./.uwe/opts/std_opts",
+}
+
+var multOpt optimize.Optimization = optimize.Optimization{
+	func(f core.Obj, convert func(core.Obj) string) string {
+		defer func() { recover() }()
+		core.SimplifyUntil(multOptHelper, f.Call(core.ArbitraryVal{4}).Call(core.ArbitraryVal{5}))
+		return "std_opts.NumOpt{std_opts.Mult}"
+	},
+	"./.uwe/opts/std_opts",
+}
+
+var OptsList []*optimize.Optimization = []*optimize.Optimization{&listOpt, &incOpt, &plusOpt, &multOpt}

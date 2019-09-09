@@ -63,7 +63,7 @@ func objToTupleHelper(f Obj) (bool, interface{}) {
 	if !isCalled2 {
 		return false, nil
 	}
-	_, isArb := called2.X.(ArbitraryVal)
+	_, isArb := called2.X.(ArbitraryVal) // TODO: check the ID??????
 	return isArb, [2]Obj{called2.Y, called.Y}
 }
 func ObjToTuple(f Obj) (Obj, Obj) {
