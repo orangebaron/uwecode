@@ -95,7 +95,7 @@ func incOptHelper(f core.Obj) (bool, interface{}) {
 func plusOptHelper(f core.Obj) (bool, interface{}) {
 	called, isCalled := f.(core.Called)
 	if !isCalled { return false, nil }
-	arb, isArb := f.(core.ArbitraryVal)
+	arb, isArb := called.X.(core.ArbitraryVal)
 	if !isArb || arb.ID != 3 { return false, nil }
 	defer func() { recover() }()
 	core.SimplifyUntil(incOptHelper, called.Y.Call(core.ArbitraryVal{0}).Call(core.ArbitraryVal{1}).Call(core.ArbitraryVal{2}))
@@ -112,9 +112,9 @@ func multOptHelper(f core.Obj) (bool, interface{}) {
 	if !isArb1 || arb1.ID != 5 { return false, nil }
 	called3, isCalled3 := called2.Y.(core.Called)
 	if !isCalled3 { return false, nil }
-	arb2, isArb2 := called3.X.(core.ArbitraryVal)
+	arb2, isArb2 := called3.Y.(core.ArbitraryVal)
 	if !isArb2 || arb2.ID != 4 { return false, nil }
-	core.SimplifyUntil(plusOptHelper, called3.Y.Call(core.ArbitraryVal{3}))
+	core.SimplifyUntil(plusOptHelper, called3.X.Call(core.ArbitraryVal{3}))
 	return true, nil
 }
 
@@ -143,7 +143,7 @@ var incOpt optimize.Optimization = optimize.Optimization{
 var plusOpt optimize.Optimization = optimize.Optimization{
 	func(f core.Obj, convert func(core.Obj) string) string {
 		defer func() { recover() }()
-		core.SimplifyUntil(plusOptHelper, f.Call(core.ArbitraryVal{0}).Call(core.ArbitraryVal{1}))
+		core.SimplifyUntil(plusOptHelper, f.Call(core.ArbitraryVal{3}))
 		return "std_opts.NumOpt{std_opts.Plus}"
 	},
 	"./.uwe/opts/std_opts",
