@@ -52,39 +52,107 @@ func MakeObjList(objs []core.Obj) core.Obj {
 	return ObjList{&objs}
 }
 
-func incOptHelper1(f core.Obj) bool {
+type OperationType byte
+
+const (
+	Inc OperationType = iota
+	Plus
+	Mult
+)
+
+type NumOpt struct {
+	OperationType
+}
+
+func (f NumOpt) Call(x core.Obj) (returnVal core.Obj) {
+	defer func() {
+		var fReal core.Obj
+		switch f.OperationType {
+		case Inc:
+			fReal = core.Function{0, core.Function{1, core.Function{2, core.Called{core.Called{core.ReturnVal{0}, core.ReturnVal{1}}, core.Called{core.ReturnVal{1}, core.ReturnVal{2}}}}}}
+		case Plus:
+			fReal = core.Function{0, core.Called{core.ReturnVal{0}, NumOpt{Inc}}}
+		case Mult:
+			fReal = core.Function{0, core.Function{1, core.Called{core.Called{core.ReturnVal{1}, core.Called{NumOpt{Plus}, core.ReturnVal{0}}}, core.ChurchNum{0}}}}
+		default:
+			panic("unknown operationtype")
+		}
+		returnVal = fReal.Call(x)
+	}()
+	switch f.OperationType {
+	case Inc:
+		return core.ArbitraryVal{core.ObjToInt(x) + 1}
+	default:
+		return NumOpt2{f.OperationType, core.ObjToInt(x)}
+	}
+}
+func (f NumOpt) Simplify(_ uint) core.Obj                        { return f }
+func (f NumOpt) Replace(_ uint, _ core.Obj) core.Obj             { return f }
+func (f NumOpt) GetUnboundVars(_ map[uint]bool, _ map[uint]bool) {}
+func (f NumOpt) GetAllVars(_ map[uint]bool)                      {}
+func (f NumOpt) ReplaceBindings(_ map[uint]bool) core.Obj        { return f }
+
+func incOptHelper1(f core.Obj) bool { // 2 DIFFERENT THINGS BECOME 1, BAD?
 	called1, isCalled1 := f.(core.Called)
-	if !isCalled1 { return false }
+	if !isCalled1 {
+		return false
+	}
 	arb1, isArb1 := called1.X.(core.ArbitraryVal)
-	if !isArb1 || arb1.ID != 1 { return false }
+	if !isArb1 || arb1.ID != 1 {
+		return false
+	}
 	called2, isCalled2 := called1.Y.(core.Called)
-	if !isCalled2 { return false }
+	if !isCalled2 {
+		return false
+	}
 	arb2, isArb2 := called2.Y.(core.ArbitraryVal)
-	if !isArb2 || arb2.ID != 2 { return false }
+	if !isArb2 || arb2.ID != 2 {
+		return false
+	}
 	called3, isCalled3 := called2.X.(core.Called)
-	if !isCalled3 { return false }
+	if !isCalled3 {
+		return false
+	}
 	arb3, isArb3 := called3.X.(core.ArbitraryVal)
-	if !isArb3 || arb3.ID != 0 { return false }
+	if !isArb3 || arb3.ID != 0 {
+		return false
+	}
 	arb4, isArb4 := called3.Y.(core.ArbitraryVal)
-	if !isArb4 || arb4.ID != 1 { return false }
+	if !isArb4 || arb4.ID != 1 {
+		return false
+	}
 	return true
 }
 
 func incOptHelper2(f core.Obj) bool {
 	called1, isCalled1 := f.(core.Called)
-	if !isCalled1 { return false }
+	if !isCalled1 {
+		return false
+	}
 	called2, isCalled2 := called1.X.(core.Called)
-	if !isCalled2 { return false }
+	if !isCalled2 {
+		return false
+	}
 	arb1, isArb1 := called2.X.(core.ArbitraryVal)
-	if !isArb1 || arb1.ID != 0 { return false }
+	if !isArb1 || arb1.ID != 0 {
+		return false
+	}
 	arb2, isArb2 := called2.Y.(core.ArbitraryVal)
-	if !isArb2 || arb2.ID != 1 { return false }
+	if !isArb2 || arb2.ID != 1 {
+		return false
+	}
 	called3, isCalled3 := called1.Y.(core.Called)
-	if !isCalled3 { return false }
+	if !isCalled3 {
+		return false
+	}
 	arb3, isArb3 := called3.X.(core.ArbitraryVal)
-	if !isArb3 || arb3.ID != 1 { return false }
+	if !isArb3 || arb3.ID != 1 {
+		return false
+	}
 	arb4, isArb4 := called3.Y.(core.ArbitraryVal)
-	if !isArb4 || arb4.ID != 2 { return false }
+	if !isArb4 || arb4.ID != 2 {
+		return false
+	}
 	return true
 }
 
@@ -94,9 +162,13 @@ func incOptHelper(f core.Obj) (bool, interface{}) {
 
 func plusOptHelper(f core.Obj) (bool, interface{}) {
 	called, isCalled := f.(core.Called)
-	if !isCalled { return false, nil }
+	if !isCalled {
+		return false, nil
+	}
 	arb, isArb := called.X.(core.ArbitraryVal)
-	if !isArb || arb.ID != 3 { return false, nil }
+	if !isArb || arb.ID != 3 {
+		return false, nil
+	}
 	defer func() { recover() }()
 	core.SimplifyUntil(incOptHelper, called.Y.Call(core.ArbitraryVal{0}).Call(core.ArbitraryVal{1}).Call(core.ArbitraryVal{2}))
 	return true, nil
@@ -105,15 +177,25 @@ func plusOptHelper(f core.Obj) (bool, interface{}) {
 func multOptHelper(f core.Obj) (bool, interface{}) {
 	defer func() { recover() }()
 	called1, isCalled1 := f.(core.Called)
-	if !isCalled1 || core.ObjToInt(called1.Y) != 0 { return false, nil }
+	if !isCalled1 || core.ObjToInt(called1.Y) != 0 {
+		return false, nil
+	}
 	called2, isCalled2 := called1.X.(core.Called)
-	if !isCalled2 { return false, nil }
+	if !isCalled2 {
+		return false, nil
+	}
 	arb1, isArb1 := called2.X.(core.ArbitraryVal)
-	if !isArb1 || arb1.ID != 5 { return false, nil }
+	if !isArb1 || arb1.ID != 5 {
+		return false, nil
+	}
 	called3, isCalled3 := called2.Y.(core.Called)
-	if !isCalled3 { return false, nil }
+	if !isCalled3 {
+		return false, nil
+	}
 	arb2, isArb2 := called3.Y.(core.ArbitraryVal)
-	if !isArb2 || arb2.ID != 4 { return false, nil }
+	if !isArb2 || arb2.ID != 4 {
+		return false, nil
+	}
 	core.SimplifyUntil(plusOptHelper, called3.X.Call(core.ArbitraryVal{3}))
 	return true, nil
 }
