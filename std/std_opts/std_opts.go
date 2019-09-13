@@ -66,18 +66,20 @@ type NumOpt struct {
 
 func (f NumOpt) Call(x core.Obj) (returnVal core.Obj) {
 	defer func() {
-		var fReal core.Obj
-		switch f.OperationType {
-		case Inc:
-			fReal = core.Function{0, core.Function{1, core.Function{2, core.Called{core.Called{core.ReturnVal{0}, core.ReturnVal{1}}, core.Called{core.ReturnVal{1}, core.ReturnVal{2}}}}}}
-		case Plus:
-			fReal = core.Function{0, core.Called{core.ReturnVal{0}, NumOpt{Inc}}}
-		case Mult:
-			fReal = core.Function{0, core.Function{1, core.Called{core.Called{core.ReturnVal{1}, core.Called{NumOpt{Plus}, core.ReturnVal{0}}}, core.ChurchNum{0}}}}
-		default:
-			panic("unknown operationtype")
+		if recover() != nil {
+			var fReal core.Obj
+			switch f.OperationType {
+			case Inc:
+				fReal = core.Function{0, core.Function{1, core.Function{2, core.Called{core.Called{core.ReturnVal{0}, core.ReturnVal{1}}, core.Called{core.ReturnVal{1}, core.ReturnVal{2}}}}}}
+			case Plus:
+				fReal = core.Function{0, core.Called{core.ReturnVal{0}, NumOpt{Inc}}}
+			case Mult:
+				fReal = core.Function{0, core.Function{1, core.Called{core.Called{core.ReturnVal{1}, core.Called{NumOpt{Plus}, core.ReturnVal{0}}}, core.ChurchNum{0}}}}
+			default:
+				panic("unknown OperationType")
+			}
+			returnVal = fReal.Call(x)
 		}
-		returnVal = fReal.Call(x)
 	}()
 	switch f.OperationType {
 	case Inc:
@@ -91,6 +93,41 @@ func (f NumOpt) Replace(_ uint, _ core.Obj) core.Obj             { return f }
 func (f NumOpt) GetUnboundVars(_ map[uint]bool, _ map[uint]bool) {}
 func (f NumOpt) GetAllVars(_ map[uint]bool)                      {}
 func (f NumOpt) ReplaceBindings(_ map[uint]bool) core.Obj        { return f }
+
+type NumOpt2 struct {
+	OperationType
+	Num uint
+}
+
+func (f NumOpt2) Call(x core.Obj) (returnVal core.Obj) {
+	defer func() {
+		if recover() != nil { // TODO: check specific error message
+			var fReal core.Obj
+			switch f.OperationType {
+			case Plus:
+				fReal = core.ChurchNum{f.Num}.Call(NumOpt{Inc})
+			case Mult:
+				fReal = core.Function{0, core.Called{core.Called{core.ReturnVal{0}, core.Called{NumOpt{Plus}, core.ChurchNum{f.Num}}}, core.ChurchNum{0}}}
+			default:
+				panic("unrecognized OperationType")
+			}
+			returnVal = fReal.Call(x)
+		}
+	}()
+	switch f.OperationType {
+	case Plus:
+		return core.ArbitraryVal{f.Num + core.ObjToInt(x)}
+	case Mult:
+		return core.ArbitraryVal{f.Num * core.ObjToInt(x)}
+	default:
+		panic("unrecognized OperationType")
+	}
+}
+func (f NumOpt2) Simplify(_ uint) core.Obj                        { return f } // TODO: maybe make a "simplify into normal object form" function
+func (f NumOpt2) Replace(_ uint, _ core.Obj) core.Obj             { return f }
+func (f NumOpt2) GetUnboundVars(_ map[uint]bool, _ map[uint]bool) {}
+func (f NumOpt2) GetAllVars(_ map[uint]bool)                      {} // TODO: f -> _?
+func (f NumOpt2) ReplaceBindings(_ map[uint]bool) core.Obj        { return f }
 
 func incOptHelper1(f core.Obj) bool { // 2 DIFFERENT THINGS BECOME 1, BAD?
 	called1, isCalled1 := f.(core.Called)
