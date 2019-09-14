@@ -83,7 +83,7 @@ func (f NumOpt) Call(x core.Obj) (returnVal core.Obj) {
 	}()
 	switch f.OperationType {
 	case Inc:
-		return core.ArbitraryVal{core.ObjToInt(x) + 1}
+		return core.ChurchNum{core.ObjToInt(x) + 1}
 	default:
 		return NumOpt2{f.OperationType, core.ObjToInt(x)}
 	}
@@ -116,9 +116,9 @@ func (f NumOpt2) Call(x core.Obj) (returnVal core.Obj) {
 	}()
 	switch f.OperationType {
 	case Plus:
-		return core.ArbitraryVal{f.Num + core.ObjToInt(x)}
+		return core.ChurchNum{f.Num + core.ObjToInt(x)}
 	case Mult:
-		return core.ArbitraryVal{f.Num * core.ObjToInt(x)}
+		return core.ChurchNum{f.Num * core.ObjToInt(x)}
 	default:
 		panic("unrecognized OperationType")
 	}
@@ -129,72 +129,36 @@ func (f NumOpt2) GetUnboundVars(_ map[uint]bool, _ map[uint]bool) {}
 func (f NumOpt2) GetAllVars(_ map[uint]bool)                      {} // TODO: f -> _?
 func (f NumOpt2) ReplaceBindings(_ map[uint]bool) core.Obj        { return f }
 
-func incOptHelper1(f core.Obj) bool { // 2 DIFFERENT THINGS BECOME 1, BAD?
+func incOptHelper(f core.Obj) (bool, interface{}) {
 	called1, isCalled1 := f.(core.Called)
 	if !isCalled1 {
-		return false
-	}
-	arb1, isArb1 := called1.X.(core.ArbitraryVal)
-	if !isArb1 || arb1.ID != 1 {
-		return false
-	}
-	called2, isCalled2 := called1.Y.(core.Called)
-	if !isCalled2 {
-		return false
-	}
-	arb2, isArb2 := called2.Y.(core.ArbitraryVal)
-	if !isArb2 || arb2.ID != 2 {
-		return false
-	}
-	called3, isCalled3 := called2.X.(core.Called)
-	if !isCalled3 {
-		return false
-	}
-	arb3, isArb3 := called3.X.(core.ArbitraryVal)
-	if !isArb3 || arb3.ID != 0 {
-		return false
-	}
-	arb4, isArb4 := called3.Y.(core.ArbitraryVal)
-	if !isArb4 || arb4.ID != 1 {
-		return false
-	}
-	return true
-}
-
-func incOptHelper2(f core.Obj) bool {
-	called1, isCalled1 := f.(core.Called)
-	if !isCalled1 {
-		return false
+		return false, nil
 	}
 	called2, isCalled2 := called1.X.(core.Called)
 	if !isCalled2 {
-		return false
+		return false, nil
 	}
 	arb1, isArb1 := called2.X.(core.ArbitraryVal)
 	if !isArb1 || arb1.ID != 0 {
-		return false
+		return false, nil
 	}
 	arb2, isArb2 := called2.Y.(core.ArbitraryVal)
 	if !isArb2 || arb2.ID != 1 {
-		return false
+		return false, nil
 	}
 	called3, isCalled3 := called1.Y.(core.Called)
 	if !isCalled3 {
-		return false
+		return false, nil
 	}
 	arb3, isArb3 := called3.X.(core.ArbitraryVal)
 	if !isArb3 || arb3.ID != 1 {
-		return false
+		return false, nil
 	}
 	arb4, isArb4 := called3.Y.(core.ArbitraryVal)
 	if !isArb4 || arb4.ID != 2 {
-		return false
+		return false, nil
 	}
-	return true
-}
-
-func incOptHelper(f core.Obj) (bool, interface{}) {
-	return incOptHelper1(f) || incOptHelper2(f), nil
+	return true, nil
 }
 
 func plusOptHelper(f core.Obj) (bool, interface{}) {
