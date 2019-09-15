@@ -30,12 +30,12 @@ func (f ObjList) Replace(n uint, a core.Obj) core.Obj {
 	}
 	return MakeObjList(newObjs)
 }
-func (f ObjList) GetUnboundVars(bound map[uint]bool, unbound map[uint]bool) {
+func (f ObjList) GetUnboundVars(bound func(uint) bool, unbound chan uint) {
 	for _, v := range *f.Objs {
 		v.GetUnboundVars(bound, unbound)
 	}
 }
-func (f ObjList) GetAllVars(vars map[uint]bool) {
+func (f ObjList) GetAllVars(vars chan uint) {
 	for _, v := range *f.Objs {
 		v.GetAllVars(vars)
 	}
@@ -88,11 +88,11 @@ func (f NumOpt) Call(x core.Obj) (returnVal core.Obj) {
 		return NumOpt2{f.OperationType, core.ObjToInt(x)}
 	}
 }
-func (f NumOpt) Simplify(_ uint) core.Obj                        { return f }
-func (f NumOpt) Replace(_ uint, _ core.Obj) core.Obj             { return f }
-func (f NumOpt) GetUnboundVars(_ map[uint]bool, _ map[uint]bool) {}
-func (f NumOpt) GetAllVars(_ map[uint]bool)                      {}
-func (f NumOpt) ReplaceBindings(_ map[uint]bool) core.Obj        { return f }
+func (f NumOpt) Simplify(_ uint) core.Obj                      { return f }
+func (f NumOpt) Replace(_ uint, _ core.Obj) core.Obj           { return f }
+func (f NumOpt) GetUnboundVars(_ func(uint) bool, _ chan uint) {}
+func (f NumOpt) GetAllVars(_ chan uint)                        {}
+func (f NumOpt) ReplaceBindings(_ map[uint]bool) core.Obj      { return f }
 
 type NumOpt2 struct {
 	OperationType
@@ -123,11 +123,11 @@ func (f NumOpt2) Call(x core.Obj) (returnVal core.Obj) {
 		panic("unrecognized OperationType")
 	}
 }
-func (f NumOpt2) Simplify(_ uint) core.Obj                        { return f } // TODO: maybe make a "simplify into normal object form" function
-func (f NumOpt2) Replace(_ uint, _ core.Obj) core.Obj             { return f }
-func (f NumOpt2) GetUnboundVars(_ map[uint]bool, _ map[uint]bool) {}
-func (f NumOpt2) GetAllVars(_ map[uint]bool)                      {} // TODO: f -> _?
-func (f NumOpt2) ReplaceBindings(_ map[uint]bool) core.Obj        { return f }
+func (f NumOpt2) Simplify(_ uint) core.Obj                      { return f } // TODO: maybe make a "simplify into normal object form" function
+func (f NumOpt2) Replace(_ uint, _ core.Obj) core.Obj           { return f }
+func (f NumOpt2) GetUnboundVars(_ func(uint) bool, _ chan uint) {}
+func (f NumOpt2) GetAllVars(_ chan uint)                        {} // TODO: f -> _?
+func (f NumOpt2) ReplaceBindings(_ map[uint]bool) core.Obj      { return f }
 
 func incOptHelper(f core.Obj) (bool, interface{}) {
 	called1, isCalled1 := f.(core.Called)

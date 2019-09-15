@@ -4,8 +4,8 @@ type Obj interface {
 	Call(Obj) Obj
 	Simplify(uint) Obj
 	Replace(uint, Obj) Obj
-	GetUnboundVars(map[uint]bool, map[uint]bool)
-	GetAllVars(map[uint]bool)
+	GetUnboundVars(func(uint) bool, chan uint)
+	GetAllVars(chan uint)
 	ReplaceBindings(map[uint]bool) Obj
 }
 
@@ -23,12 +23,12 @@ func (f ReturnVal) Replace(n uint, x Obj) Obj {
 		return f
 	}
 }
-func (f ReturnVal) GetUnboundVars(bound map[uint]bool, unbound map[uint]bool) {
-	if !bound[f.N] {
-		unbound[f.N] = true
+func (f ReturnVal) GetUnboundVars(bound func(uint) bool, unbound chan uint) {
+	if !bound(f.N) {
+		unbound <- f.N
 	}
 }
-func (f ReturnVal) GetAllVars(vars map[uint]bool)       { vars[f.N] = true }
+func (f ReturnVal) GetAllVars(vars chan uint)           { vars <- f.N }
 func (f ReturnVal) ReplaceBindings(_ map[uint]bool) Obj { return f }
 
 // N -> x
@@ -38,9 +38,21 @@ type Function struct {
 }
 
 func (f Function) Call(a Obj) Obj {
-	bound, unbound := make(map[uint]bool), make(map[uint]bool)
-	a.GetUnboundVars(bound, unbound)
-	f = f.ReplaceBindings(unbound).(Function)
+	unbound := make(chan uint)
+	go func() {
+		a.GetUnboundVars(func(_ uint) bool { return false }, unbound)
+		close(unbound)
+	}()
+	unboundDict := make(map[uint]bool)
+	for {
+		select {
+		case n := <-unbound:
+			unboundDict[n] = true
+		default:
+			break
+		}
+	}
+	f = f.ReplaceBindings(unboundDict).(Function)
 	return f.X.Replace(f.N, a)
 }
 func (f Function) Simplify(depth uint) Obj {
@@ -56,25 +68,34 @@ func (f Function) Replace(n uint, x Obj) Obj {
 		return Function{f.N, f.X.Replace(n, x)}
 	}
 }
-func (f Function) GetUnboundVars(bound map[uint]bool, unbound map[uint]bool) {
-	old := bound[f.N]
-	bound[f.N] = true
-	f.X.GetUnboundVars(bound, unbound)
-	bound[f.N] = old
+func (f Function) GetUnboundVars(bound func(uint) bool, unbound chan uint) {
+	f.X.GetUnboundVars(func(n uint) bool { return n == f.N || bound(n) }, unbound)
 }
-func (f Function) GetAllVars(vars map[uint]bool) {
-	vars[f.N] = true
+func (f Function) GetAllVars(vars chan uint) {
+	vars <- f.N
 	f.X.GetAllVars(vars)
 }
 func (f Function) ReplaceBindings(toReplace map[uint]bool) Obj {
 	if toReplace[f.N] {
-		allVars := make(map[uint]bool)
+		allVars := make(chan uint)
+		go func() {
+			f.X.GetAllVars(allVars)
+			close(allVars)
+		}()
+		allVarsDict := make(map[uint]bool)
 		for k, v := range toReplace {
-			allVars[k] = v
+			allVarsDict[k] = v
 		}
-		f.X.GetAllVars(allVars)
+		for {
+			select {
+			case n := <-allVars:
+				allVarsDict[n] = true
+			default:
+				break
+			}
+		}
 		var newN uint
-		for newN = uint(0); allVars[newN]; newN++ {
+		for newN = uint(0); allVarsDict[newN]; newN++ {
 		}
 		f.X = f.X.Replace(f.N, ReturnVal{newN})
 		f.N = newN
@@ -100,13 +121,29 @@ func (f Called) Simplify(depth uint) Obj {
 	}
 	return v
 }
-func (f Called) Replace(n uint, x Obj) Obj { return Called{f.X.Replace(n, x), f.Y.Replace(n, x)} }
-func (f Called) GetUnboundVars(bound map[uint]bool, unbound map[uint]bool) {
-	f.X.GetUnboundVars(bound, unbound)
-	f.Y.GetUnboundVars(bound, unbound)
+func (f Called) Replace(n uint, x Obj) Obj {
+	a := make(chan Obj)
+	go func() {
+		a <- f.X.Replace(n, x)
+	}()
+	b := f.Y.Replace(n, x)
+	return Called{<-a, b}
 }
-func (f Called) GetAllVars(vars map[uint]bool) {
-	f.X.GetAllVars(vars)
+func (f Called) GetUnboundVars(bound func(uint) bool, unbound chan uint) {
+	done := make(chan bool)
+	go func() {
+		f.X.GetUnboundVars(bound, unbound)
+		close(done)
+	}()
+	f.Y.GetUnboundVars(bound, unbound)
+	<-done
+}
+func (f Called) GetAllVars(vars chan uint) {
+	done := make(chan bool)
+	go func() {
+		f.X.GetAllVars(vars)
+		close(done)
+	}()
 	f.Y.GetAllVars(vars)
 }
 func (f Called) ReplaceBindings(toReplace map[uint]bool) Obj {
@@ -118,12 +155,12 @@ type ChurchNum struct {
 	Num uint
 }
 
-func (f ChurchNum) Call(a Obj) Obj                                  { return CalledChurchNum{f.Num, a} }
-func (f ChurchNum) Simplify(_ uint) Obj                             { return f }
-func (f ChurchNum) Replace(_ uint, _ Obj) Obj                       { return f }
-func (f ChurchNum) GetUnboundVars(_ map[uint]bool, _ map[uint]bool) {}
-func (f ChurchNum) GetAllVars(_ map[uint]bool)                      {}
-func (f ChurchNum) ReplaceBindings(_ map[uint]bool) Obj             { return f }
+func (f ChurchNum) Call(a Obj) Obj                                { return CalledChurchNum{f.Num, a} }
+func (f ChurchNum) Simplify(_ uint) Obj                           { return f }
+func (f ChurchNum) Replace(_ uint, _ Obj) Obj                     { return f }
+func (f ChurchNum) GetUnboundVars(_ func(uint) bool, _ chan uint) {}
+func (f ChurchNum) GetAllVars(_ chan uint)                        {}
+func (f ChurchNum) ReplaceBindings(_ map[uint]bool) Obj           { return f }
 
 // a -> X (x (x ...Num times... (x a))))
 type CalledChurchNum struct {
@@ -139,10 +176,10 @@ func (f CalledChurchNum) Call(a Obj) Obj {
 }
 func (f CalledChurchNum) Simplify(_ uint) Obj       { return f }
 func (f CalledChurchNum) Replace(n uint, x Obj) Obj { return CalledChurchNum{f.Num, f.X.Replace(n, x)} }
-func (f CalledChurchNum) GetUnboundVars(bound map[uint]bool, unbound map[uint]bool) {
+func (f CalledChurchNum) GetUnboundVars(bound func(uint) bool, unbound chan uint) {
 	f.X.GetUnboundVars(bound, unbound)
 }
-func (f CalledChurchNum) GetAllVars(vars map[uint]bool) {
+func (f CalledChurchNum) GetAllVars(vars chan uint) {
 	f.X.GetAllVars(vars)
 }
 func (f CalledChurchNum) ReplaceBindings(toReplace map[uint]bool) Obj {
@@ -170,12 +207,12 @@ func (f ChurchTupleChar) ToNormalObj() Obj {
 	}
 	return tuple(tuple(tuple(bools[0], bools[1]), tuple(bools[2], bools[3])), tuple(tuple(bools[4], bools[5]), tuple(bools[6], bools[7])))
 }
-func (f ChurchTupleChar) Call(a Obj) Obj                                  { return Called{f.ToNormalObj(), a} }
-func (f ChurchTupleChar) Simplify(_ uint) Obj                             { return f }
-func (f ChurchTupleChar) Replace(_ uint, _ Obj) Obj                       { return f }
-func (f ChurchTupleChar) GetUnboundVars(_ map[uint]bool, _ map[uint]bool) {}
-func (f ChurchTupleChar) GetAllVars(_ map[uint]bool)                      {}
-func (f ChurchTupleChar) ReplaceBindings(_ map[uint]bool) Obj             { return f }
+func (f ChurchTupleChar) Call(a Obj) Obj                                { return Called{f.ToNormalObj(), a} }
+func (f ChurchTupleChar) Simplify(_ uint) Obj                           { return f }
+func (f ChurchTupleChar) Replace(_ uint, _ Obj) Obj                     { return f }
+func (f ChurchTupleChar) GetUnboundVars(_ func(uint) bool, _ chan uint) {}
+func (f ChurchTupleChar) GetAllVars(_ chan uint)                        {}
+func (f ChurchTupleChar) ReplaceBindings(_ map[uint]bool) Obj           { return f }
 
 type ChurchTupleCharString struct {
 	Str string
@@ -191,9 +228,9 @@ func (f ChurchTupleCharString) ToNormalObj() Obj {
 		return just(tuple(ChurchTupleChar{f.Str[0]}, ChurchTupleCharString{f.Str[1:]}))
 	}
 }
-func (f ChurchTupleCharString) Call(a Obj) Obj                                  { return Called{f.ToNormalObj(), a} }
-func (f ChurchTupleCharString) Simplify(_ uint) Obj                             { return f }
-func (f ChurchTupleCharString) Replace(_ uint, _ Obj) Obj                       { return f }
-func (f ChurchTupleCharString) GetUnboundVars(_ map[uint]bool, _ map[uint]bool) {}
-func (f ChurchTupleCharString) GetAllVars(_ map[uint]bool)                      {}
-func (f ChurchTupleCharString) ReplaceBindings(_ map[uint]bool) Obj             { return f }
+func (f ChurchTupleCharString) Call(a Obj) Obj                                { return Called{f.ToNormalObj(), a} }
+func (f ChurchTupleCharString) Simplify(_ uint) Obj                           { return f }
+func (f ChurchTupleCharString) Replace(_ uint, _ Obj) Obj                     { return f }
+func (f ChurchTupleCharString) GetUnboundVars(_ func(uint) bool, _ chan uint) {}
+func (f ChurchTupleCharString) GetAllVars(_ chan uint)                        {}
+func (f ChurchTupleCharString) ReplaceBindings(_ map[uint]bool) Obj           { return f }

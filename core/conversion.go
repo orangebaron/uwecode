@@ -5,19 +5,12 @@ type ArbitraryVal struct {
 	ID uint
 }
 
-func (f ArbitraryVal) Call(x Obj) Obj            { return Called{f, x} }
-func (f ArbitraryVal) Simplify(depth uint) Obj   { return f }
-func (f ArbitraryVal) Replace(n uint, x Obj) Obj { return f }
-func (f ArbitraryVal) ReplaceF(fun func(Obj) bool, x Obj) Obj {
-	if fun(f) {
-		return x
-	} else {
-		return f
-	}
-}
-func (f ArbitraryVal) GetUnboundVars(_ map[uint]bool, _ map[uint]bool) {}
-func (f ArbitraryVal) GetAllVars(_ map[uint]bool)                      {}
-func (f ArbitraryVal) ReplaceBindings(_ map[uint]bool) Obj             { return f }
+func (f ArbitraryVal) Call(x Obj) Obj                                { return Called{f, x} }
+func (f ArbitraryVal) Simplify(depth uint) Obj                       { return f }
+func (f ArbitraryVal) Replace(n uint, x Obj) Obj                     { return f }
+func (f ArbitraryVal) GetUnboundVars(_ func(uint) bool, _ chan uint) {}
+func (f ArbitraryVal) GetAllVars(_ chan uint)                        {}
+func (f ArbitraryVal) ReplaceBindings(_ map[uint]bool) Obj           { return f }
 
 func objToIntHelper(f Obj) (bool, interface{}) {
 	n := uint(0)
