@@ -10,14 +10,14 @@ func min(a uint, b uint) uint {
 	}
 }
 func SimplifyUntilNoPanic(f func(Obj) (bool, interface{}), obj Obj) (bool, interface{}) {
-	newObj := obj.Simplify(1)
+	newObj := obj.Simplify(1, make(chan bool))
 	for depth := uint(2); ; depth = min(depth+1, maxDepth) {
 		isGood, val := f(newObj)
 		if isGood {
 			return true, val
 		} else {
 			obj = newObj
-			newObj = obj.Simplify(depth)
+			newObj = obj.Simplify(depth, make(chan bool))
 			if newObj == obj {
 				if depth == maxDepth {
 					break

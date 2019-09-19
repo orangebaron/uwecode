@@ -6,7 +6,7 @@ type ArbitraryVal struct {
 }
 
 func (f ArbitraryVal) Call(x Obj) Obj                                { return Called{f, x} }
-func (f ArbitraryVal) Simplify(depth uint) Obj                       { return f }
+func (f ArbitraryVal) Simplify(depth uint, stop chan bool) Obj       { return f }
 func (f ArbitraryVal) Replace(n uint, x Obj) Obj                     { return f }
 func (f ArbitraryVal) GetUnboundVars(_ func(uint) bool, _ chan uint) {}
 func (f ArbitraryVal) GetAllVars(_ chan uint)                        {}

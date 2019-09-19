@@ -2,7 +2,7 @@ package core
 
 type Obj interface {
 	Call(Obj) Obj
-	Simplify(uint) Obj
+	Simplify(uint, chan bool) Obj // the chan will have a bool when a returnval is expected faster; if you read from it just write another bool into it
 	Replace(uint, Obj) Obj
 	GetUnboundVars(func(uint) bool, chan uint)
 	GetAllVars(chan uint)
@@ -14,8 +14,8 @@ type ReturnVal struct {
 	N uint
 }
 
-func (f ReturnVal) Call(x Obj) Obj      { return Called{f, x} }
-func (f ReturnVal) Simplify(_ uint) Obj { return f }
+func (f ReturnVal) Call(x Obj) Obj                   { return Called{f, x} }
+func (f ReturnVal) Simplify(_ uint, _ chan bool) Obj { return f }
 func (f ReturnVal) Replace(n uint, x Obj) Obj {
 	if n == f.N {
 		return x
@@ -56,11 +56,11 @@ functionCallOuter:
 	f = f.ReplaceBindings(unboundDict).(Function)
 	return f.X.Replace(f.N, a)
 }
-func (f Function) Simplify(depth uint) Obj {
-	if depth == 0 {
+func (f Function) Simplify(depth uint, stop chan bool) Obj {
+	if depth == 0 || len(stop) > 0 {
 		return f
 	}
-	return Function{f.N, f.X.Simplify(depth - 1)}
+	return Function{f.N, f.X.Simplify(depth-1, stop)}
 }
 func (f Function) Replace(n uint, x Obj) Obj {
 	if n == f.N {
@@ -113,15 +113,52 @@ type Called struct {
 }
 
 func (f Called) Call(a Obj) Obj { return Called{f.X.Call(f.Y), a} }
-func (f Called) Simplify(depth uint) Obj {
-	if depth == 0 {
+func (f Called) Simplify(depth uint, stop chan bool) Obj {
+	if depth == 0 || len(stop) > 0 {
 		return f
 	}
-	v := f.X.Call(f.Y)
-	if v != f {
-		v = v.Simplify(depth - 1)
+	// Initially start 3 processes: one to do returnVal<-f.X.Call(f.Y).Simplify, one to call f.X.Simplify, and one to call f.Y.Simplify
+	// If f.X.Simplify finishes first, make another process to do returnVal<-that.Call(f.Y).Simplify
+	// Vice versa for if f.Y.Simplify finishes first
+	// If both f.X.Simplify and f.Y.Simplify finish before the above, make another process that does returnVal<-simplifiedX.Call(simplifiedY).Simplify
+	// Return <-returnVal and clean up all the processes
+	returnVal, otherSimplifiedVal := make(chan Obj), make(chan Obj)
+	secondStopChan := make(chan bool, 1)
+	go func() {
+		called := f.X.Call(f.Y)
+		if called != f {
+			returnVal <- called.Simplify(depth-1, secondStopChan)
+		}
+	}()
+	go func() {
+		newX := f.X.Simplify(depth-1, secondStopChan)
+		if len(otherSimplifiedVal) == 0 {
+			otherSimplifiedVal <- newX
+			returnVal <- newX.Call(f.Y).Simplify(depth-1, secondStopChan)
+		} else {
+			returnVal <- newX.Call(<-otherSimplifiedVal).Simplify(depth-1, secondStopChan)
+		}
+	}()
+	go func() {
+		newY := f.Y.Simplify(depth-1, secondStopChan)
+		if len(otherSimplifiedVal) == 0 {
+			otherSimplifiedVal <- newY
+			returnVal <- newY.Call(f.Y).Simplify(depth-1, secondStopChan)
+		} else {
+			returnVal <- (<-otherSimplifiedVal).Call(newY).Simplify(depth-1, secondStopChan)
+		}
+	}()
+	for {
+		select {
+		case r := <-returnVal:
+			secondStopChan <- true
+			return r
+		case <-stop:
+			stop <- true
+			secondStopChan <- true
+			return <-returnVal
+		}
 	}
-	return v
 }
 func (f Called) Replace(n uint, x Obj) Obj {
 	a := make(chan Obj)
@@ -158,7 +195,7 @@ type ChurchNum struct {
 }
 
 func (f ChurchNum) Call(a Obj) Obj                                { return CalledChurchNum{f.Num, a} }
-func (f ChurchNum) Simplify(_ uint) Obj                           { return f }
+func (f ChurchNum) Simplify(_ uint, _ chan bool) Obj              { return f }
 func (f ChurchNum) Replace(_ uint, _ Obj) Obj                     { return f }
 func (f ChurchNum) GetUnboundVars(_ func(uint) bool, _ chan uint) {}
 func (f ChurchNum) GetAllVars(_ chan uint)                        {}
@@ -176,8 +213,8 @@ func (f CalledChurchNum) Call(a Obj) Obj {
 	}
 	return a
 }
-func (f CalledChurchNum) Simplify(_ uint) Obj       { return f }
-func (f CalledChurchNum) Replace(n uint, x Obj) Obj { return CalledChurchNum{f.Num, f.X.Replace(n, x)} }
+func (f CalledChurchNum) Simplify(_ uint, _ chan bool) Obj { return f }
+func (f CalledChurchNum) Replace(n uint, x Obj) Obj        { return CalledChurchNum{f.Num, f.X.Replace(n, x)} }
 func (f CalledChurchNum) GetUnboundVars(bound func(uint) bool, unbound chan uint) {
 	f.X.GetUnboundVars(bound, unbound)
 }
@@ -210,7 +247,7 @@ func (f ChurchTupleChar) ToNormalObj() Obj {
 	return tuple(tuple(tuple(bools[0], bools[1]), tuple(bools[2], bools[3])), tuple(tuple(bools[4], bools[5]), tuple(bools[6], bools[7])))
 }
 func (f ChurchTupleChar) Call(a Obj) Obj                                { return Called{f.ToNormalObj(), a} }
-func (f ChurchTupleChar) Simplify(_ uint) Obj                           { return f }
+func (f ChurchTupleChar) Simplify(_ uint, _ chan bool) Obj              { return f }
 func (f ChurchTupleChar) Replace(_ uint, _ Obj) Obj                     { return f }
 func (f ChurchTupleChar) GetUnboundVars(_ func(uint) bool, _ chan uint) {}
 func (f ChurchTupleChar) GetAllVars(_ chan uint)                        {}
@@ -231,7 +268,7 @@ func (f ChurchTupleCharString) ToNormalObj() Obj {
 	}
 }
 func (f ChurchTupleCharString) Call(a Obj) Obj                                { return Called{f.ToNormalObj(), a} }
-func (f ChurchTupleCharString) Simplify(_ uint) Obj                           { return f }
+func (f ChurchTupleCharString) Simplify(_ uint, _ chan bool) Obj              { return f }
 func (f ChurchTupleCharString) Replace(_ uint, _ Obj) Obj                     { return f }
 func (f ChurchTupleCharString) GetUnboundVars(_ func(uint) bool, _ chan uint) {}
 func (f ChurchTupleCharString) GetAllVars(_ chan uint)                        {}
