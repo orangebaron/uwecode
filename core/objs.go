@@ -1,5 +1,7 @@
 package core
 
+import "sync"
+
 type Obj interface {
 	Call(Obj) Obj
 	Simplify(uint, chan bool) Obj // the chan will have a bool when a returnval is expected faster; if you read from it just write another bool into it
@@ -125,6 +127,7 @@ func (f Called) Simplify(depth uint, stop chan bool) Obj {
 	returnVal := make(chan Obj)
 	otherSimplifiedVal := make(chan Obj, 1)
 	secondStopChan := make(chan bool, 1)
+	otherSimplifiedValMutex := &sync.Mutex{}
 	go func() {
 		called := f.X.Call(f.Y)
 		if called != f {
@@ -133,14 +136,18 @@ func (f Called) Simplify(depth uint, stop chan bool) Obj {
 	}()
 	go func() {
 		newX := f.X.Simplify(depth-1, secondStopChan)
+		otherSimplifiedValMutex.Lock()
 		if len(otherSimplifiedVal) == 0 {
 			otherSimplifiedVal <- newX
+			otherSimplifiedValMutex.Unlock()
 			called := newX.Call(f.Y)
 			if called != f {
 				returnVal <- called.Simplify(depth-1, secondStopChan)
 			}
 		} else {
-			called := newX.Call(<-otherSimplifiedVal)
+			other := <-otherSimplifiedVal
+			otherSimplifiedValMutex.Unlock()
+			called := newX.Call(other)
 			if called != f {
 				returnVal <- called.Simplify(depth-1, secondStopChan)
 			} else {
@@ -150,14 +157,18 @@ func (f Called) Simplify(depth uint, stop chan bool) Obj {
 	}()
 	go func() {
 		newY := f.Y.Simplify(depth-1, secondStopChan)
+		otherSimplifiedValMutex.Lock()
 		if len(otherSimplifiedVal) == 0 {
 			otherSimplifiedVal <- newY
+			otherSimplifiedValMutex.Unlock()
 			called := f.X.Call(newY)
 			if called != f {
 				returnVal <- called.Simplify(depth-1, secondStopChan)
 			}
 		} else {
-			called := (<-otherSimplifiedVal).Call(newY)
+			other := <-otherSimplifiedVal
+			otherSimplifiedValMutex.Unlock()
+			called := other.Call(newY)
 			if called != f {
 				returnVal <- called.Simplify(depth-1, secondStopChan)
 			} else {
