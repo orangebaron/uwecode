@@ -122,7 +122,8 @@ func (f Called) Simplify(depth uint, stop chan bool) Obj {
 	// Vice versa for if f.Y.Simplify finishes first
 	// If both f.X.Simplify and f.Y.Simplify finish before the above, make another process that does returnVal<-simplifiedX.Call(simplifiedY).Simplify
 	// Return <-returnVal and clean up all the processes
-	returnVal, otherSimplifiedVal := make(chan Obj), make(chan Obj)
+	returnVal := make(chan Obj)
+	otherSimplifiedVal := make(chan Obj, 1)
 	secondStopChan := make(chan bool, 1)
 	go func() {
 		called := f.X.Call(f.Y)
@@ -134,18 +135,34 @@ func (f Called) Simplify(depth uint, stop chan bool) Obj {
 		newX := f.X.Simplify(depth-1, secondStopChan)
 		if len(otherSimplifiedVal) == 0 {
 			otherSimplifiedVal <- newX
-			returnVal <- newX.Call(f.Y).Simplify(depth-1, secondStopChan)
+			called := newX.Call(f.Y)
+			if called != f {
+				returnVal <- called.Simplify(depth-1, secondStopChan)
+			}
 		} else {
-			returnVal <- newX.Call(<-otherSimplifiedVal).Simplify(depth-1, secondStopChan)
+			called := newX.Call(<-otherSimplifiedVal)
+			if called != f {
+				returnVal <- called.Simplify(depth-1, secondStopChan)
+			} else {
+				returnVal <- called
+			}
 		}
 	}()
 	go func() {
 		newY := f.Y.Simplify(depth-1, secondStopChan)
 		if len(otherSimplifiedVal) == 0 {
 			otherSimplifiedVal <- newY
-			returnVal <- newY.Call(f.Y).Simplify(depth-1, secondStopChan)
+			called := f.X.Call(newY)
+			if called != f {
+				returnVal <- called.Simplify(depth-1, secondStopChan)
+			}
 		} else {
-			returnVal <- (<-otherSimplifiedVal).Call(newY).Simplify(depth-1, secondStopChan)
+			called := (<-otherSimplifiedVal).Call(newY)
+			if called != f {
+				returnVal <- called.Simplify(depth-1, secondStopChan)
+			} else {
+				returnVal <- called
+			}
 		}
 	}()
 	for {
