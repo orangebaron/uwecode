@@ -2,6 +2,17 @@ package core
 
 import "sync"
 
+type GlobalState struct {
+	*sync.WaitGroup
+	Stop chan struct{}
+}
+
+type SimplifyState struct {
+	GlobalState
+	*sync.Mutex
+	AlreadySimplified map[Obj]Obj
+}
+
 type Obj interface {
 	Call(Obj) Obj
 	Simplify(uint, chan bool) Obj // the chan will have a bool when a returnval is expected faster; if you read from it just write another bool into it
