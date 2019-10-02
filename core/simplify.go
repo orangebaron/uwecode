@@ -1,5 +1,7 @@
 package core
 
+import "sync"
+
 const maxDepth = uint(10000)
 
 func min(a uint, b uint) uint {
@@ -10,14 +12,15 @@ func min(a uint, b uint) uint {
 	}
 }
 func SimplifyUntilNoPanic(f func(Obj) (bool, interface{}), obj Obj) (bool, interface{}) {
-	newObj := obj.Simplify(1, make(chan bool))
+	state := SimplifyState{GlobalState{&sync.WaitGroup{}, make(chan struct{})}, &sync.Mutex{}, make(map[Obj]Obj)}
+	newObj := obj.Simplify(1, state)
 	for depth := uint(2); ; depth = min(depth+1, maxDepth) {
 		isGood, val := f(newObj)
 		if isGood {
 			return true, val
 		} else {
 			obj = newObj
-			newObj = obj.Simplify(depth, make(chan bool))
+			newObj = obj.Simplify(depth, state)
 			if newObj == obj {
 				if depth == maxDepth {
 					break
@@ -27,6 +30,7 @@ func SimplifyUntilNoPanic(f func(Obj) (bool, interface{}), obj Obj) (bool, inter
 			}
 		}
 	}
+	state.GlobalState.WaitGroup.Wait()
 	return false, newObj
 }
 func SimplifyUntil(f func(Obj) (bool, interface{}), obj Obj) interface{} {

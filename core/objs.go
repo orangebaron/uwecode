@@ -15,7 +15,7 @@ type SimplifyState struct {
 
 type Obj interface {
 	Call(Obj) Obj
-	Simplify(uint, chan bool) Obj // the chan will have a bool when a returnval is expected faster; if you read from it just write another bool into it
+	Simplify(uint, SimplifyState) Obj
 	Replace(uint, Obj) Obj
 	GetUnboundVars(func(uint) bool, chan uint)
 	GetAllVars(chan uint)
@@ -27,8 +27,8 @@ type ReturnVal struct {
 	N uint
 }
 
-func (f ReturnVal) Call(x Obj) Obj                   { return Called{f, x} }
-func (f ReturnVal) Simplify(_ uint, _ chan bool) Obj { return f }
+func (f ReturnVal) Call(x Obj) Obj                       { return Called{f, x} }
+func (f ReturnVal) Simplify(_ uint, _ SimplifyState) Obj { return f }
 func (f ReturnVal) Replace(n uint, x Obj) Obj {
 	if n == f.N {
 		return x
@@ -69,11 +69,26 @@ functionCallOuter:
 	f = f.ReplaceBindings(unboundDict).(Function)
 	return f.X.Replace(f.N, a)
 }
-func (f Function) Simplify(depth uint, stop chan bool) Obj {
-	if depth == 0 || len(stop) > 0 {
+func (f Function) Simplify(depth uint, state SimplifyState) Obj {
+	select {
+	case <-state.Stop:
 		return f
+	default:
+		if depth == 0 {
+			return f
+		}
 	}
-	return Function{f.N, f.X.Simplify(depth-1, stop)}
+	state.Mutex.Lock()
+	defer state.Mutex.Unlock()
+	if v, exists := state.AlreadySimplified[f]; exists {
+		return v
+	} else {
+		state.Mutex.Unlock()
+		v := Function{f.N, f.X.Simplify(depth-1, state)}
+		state.Mutex.Lock()
+		state.AlreadySimplified[f] = v
+		return v
+	}
 }
 func (f Function) Replace(n uint, x Obj) Obj {
 	if n == f.N {
@@ -126,75 +141,88 @@ type Called struct {
 }
 
 func (f Called) Call(a Obj) Obj { return Called{f.X.Call(f.Y), a} }
-func (f Called) Simplify(depth uint, stop chan bool) Obj {
-	if depth == 0 || len(stop) > 0 {
+func (f Called) Simplify(depth uint, state SimplifyState) Obj {
+	select {
+	case <-state.Stop:
 		return f
+	default:
+		if depth == 0 {
+			return f
+		}
 	}
-	// Initially start 3 processes: one to do returnVal<-f.X.Call(f.Y).Simplify, one to call f.X.Simplify, and one to call f.Y.Simplify
-	// If f.X.Simplify finishes first, make another process to do returnVal<-that.Call(f.Y).Simplify
-	// Vice versa for if f.Y.Simplify finishes first
-	// If both f.X.Simplify and f.Y.Simplify finish before the above, make another process that does returnVal<-simplifiedX.Call(simplifiedY).Simplify
-	// Return <-returnVal and clean up all the processes
-	returnVal := make(chan Obj)
+	state.Mutex.Lock()
+	if v, exists := state.AlreadySimplified[f]; exists {
+		defer state.Mutex.Unlock()
+		return v
+	}
+	state.Mutex.Unlock()
+	returnVal := make(chan Obj, 3)
 	otherSimplifiedVal := make(chan Obj, 1)
-	secondStopChan := make(chan bool, 1)
+	newState := state
+	newState.GlobalState.Stop = make(chan struct{})
 	otherSimplifiedValMutex := &sync.Mutex{}
+	state.WaitGroup.Add(3)
 	go func() {
 		called := f.X.Call(f.Y)
 		if called != f {
-			returnVal <- called.Simplify(depth-1, secondStopChan)
+			returnVal <- called.Simplify(depth-1, newState)
 		}
+		state.WaitGroup.Done()
 	}()
 	go func() {
-		newX := f.X.Simplify(depth-1, secondStopChan)
+		newX := f.X.Simplify(depth-1, newState)
 		otherSimplifiedValMutex.Lock()
 		if len(otherSimplifiedVal) == 0 {
 			otherSimplifiedVal <- newX
 			otherSimplifiedValMutex.Unlock()
 			called := newX.Call(f.Y)
 			if called != f {
-				returnVal <- called.Simplify(depth-1, secondStopChan)
+				returnVal <- called.Simplify(depth-1, newState)
 			}
 		} else {
 			other := <-otherSimplifiedVal
 			otherSimplifiedValMutex.Unlock()
 			called := newX.Call(other)
 			if called != f {
-				returnVal <- called.Simplify(depth-1, secondStopChan)
+				returnVal <- called.Simplify(depth-1, newState)
 			} else {
 				returnVal <- called
 			}
 		}
+		state.WaitGroup.Done()
 	}()
 	go func() {
-		newY := f.Y.Simplify(depth-1, secondStopChan)
+		newY := f.Y.Simplify(depth-1, newState)
 		otherSimplifiedValMutex.Lock()
 		if len(otherSimplifiedVal) == 0 {
 			otherSimplifiedVal <- newY
 			otherSimplifiedValMutex.Unlock()
 			called := f.X.Call(newY)
 			if called != f {
-				returnVal <- called.Simplify(depth-1, secondStopChan)
+				returnVal <- called.Simplify(depth-1, newState)
 			}
 		} else {
 			other := <-otherSimplifiedVal
 			otherSimplifiedValMutex.Unlock()
 			called := other.Call(newY)
 			if called != f {
-				returnVal <- called.Simplify(depth-1, secondStopChan)
+				returnVal <- called.Simplify(depth-1, newState)
 			} else {
 				returnVal <- called
 			}
 		}
+		state.WaitGroup.Done()
 	}()
 	for {
 		select {
 		case r := <-returnVal:
-			secondStopChan <- true
+			close(newState.GlobalState.Stop)
+			state.Mutex.Lock()
+			state.AlreadySimplified[f] = r
+			state.Mutex.Unlock()
 			return r
-		case <-stop:
-			stop <- true
-			secondStopChan <- true
+		case <-state.GlobalState.Stop:
+			close(newState.GlobalState.Stop)
 			return <-returnVal
 		}
 	}
@@ -234,7 +262,7 @@ type ChurchNum struct {
 }
 
 func (f ChurchNum) Call(a Obj) Obj                                { return CalledChurchNum{f.Num, a} }
-func (f ChurchNum) Simplify(_ uint, _ chan bool) Obj              { return f }
+func (f ChurchNum) Simplify(_ uint, _ SimplifyState) Obj          { return f }
 func (f ChurchNum) Replace(_ uint, _ Obj) Obj                     { return f }
 func (f ChurchNum) GetUnboundVars(_ func(uint) bool, _ chan uint) {}
 func (f ChurchNum) GetAllVars(_ chan uint)                        {}
@@ -252,8 +280,8 @@ func (f CalledChurchNum) Call(a Obj) Obj {
 	}
 	return a
 }
-func (f CalledChurchNum) Simplify(_ uint, _ chan bool) Obj { return f }
-func (f CalledChurchNum) Replace(n uint, x Obj) Obj        { return CalledChurchNum{f.Num, f.X.Replace(n, x)} }
+func (f CalledChurchNum) Simplify(_ uint, _ SimplifyState) Obj { return f }
+func (f CalledChurchNum) Replace(n uint, x Obj) Obj            { return CalledChurchNum{f.Num, f.X.Replace(n, x)} }
 func (f CalledChurchNum) GetUnboundVars(bound func(uint) bool, unbound chan uint) {
 	f.X.GetUnboundVars(bound, unbound)
 }
@@ -286,7 +314,7 @@ func (f ChurchTupleChar) ToNormalObj() Obj {
 	return tuple(tuple(tuple(bools[0], bools[1]), tuple(bools[2], bools[3])), tuple(tuple(bools[4], bools[5]), tuple(bools[6], bools[7])))
 }
 func (f ChurchTupleChar) Call(a Obj) Obj                                { return Called{f.ToNormalObj(), a} }
-func (f ChurchTupleChar) Simplify(_ uint, _ chan bool) Obj              { return f }
+func (f ChurchTupleChar) Simplify(_ uint, _ SimplifyState) Obj          { return f }
 func (f ChurchTupleChar) Replace(_ uint, _ Obj) Obj                     { return f }
 func (f ChurchTupleChar) GetUnboundVars(_ func(uint) bool, _ chan uint) {}
 func (f ChurchTupleChar) GetAllVars(_ chan uint)                        {}
@@ -307,7 +335,7 @@ func (f ChurchTupleCharString) ToNormalObj() Obj {
 	}
 }
 func (f ChurchTupleCharString) Call(a Obj) Obj                                { return Called{f.ToNormalObj(), a} }
-func (f ChurchTupleCharString) Simplify(_ uint, _ chan bool) Obj              { return f }
+func (f ChurchTupleCharString) Simplify(_ uint, _ SimplifyState) Obj          { return f }
 func (f ChurchTupleCharString) Replace(_ uint, _ Obj) Obj                     { return f }
 func (f ChurchTupleCharString) GetUnboundVars(_ func(uint) bool, _ chan uint) {}
 func (f ChurchTupleCharString) GetAllVars(_ chan uint)                        {}
