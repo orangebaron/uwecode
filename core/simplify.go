@@ -12,21 +12,17 @@ func min(a uint, b uint) uint {
 	}
 }
 func SimplifyUntilNoPanic(f func(Obj) (bool, interface{}), obj Obj) (bool, interface{}) {
-	state := SimplifyState{GlobalState{&sync.WaitGroup{}, make(chan struct{})}, &sync.Mutex{}, make(map[Obj]Obj)}
-	newObj := obj.Simplify(1, state)
-	for depth := uint(2); ; depth = min(depth+1, maxDepth) {
+	state := SimplifyState{GlobalState{&sync.WaitGroup{}, make(chan struct{})}, &sync.Mutex{}, make(map[Obj]Obj), make(map[Obj]chan struct{}), make([]Obj, 0)}
+	newObj := obj.Simplify(state)
+	for {
 		isGood, val := f(newObj)
 		if isGood {
 			return true, val
 		} else {
 			obj = newObj
-			newObj = obj.Simplify(depth, state)
+			newObj = obj.Simplify(state)
 			if newObj == obj {
-				if depth == maxDepth {
-					break
-				} else {
-					depth += 1000
-				}
+				break
 			}
 		}
 	}
