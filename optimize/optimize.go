@@ -77,7 +77,7 @@ var DefaultOpt = Optimization{
 
 func OptimizeObj(opts []*Optimization, obj core.Obj) (string, string) {
 	optsUsed := make(map[*Optimization]bool)
-	state := core.GlobalState{&sync.WaitGroup{}, make(chan struct{})}
+	state := core.MakeGlobalState()
 	mainString := OptimizeObjHelper(append(opts, &DefaultOpt), optsUsed, obj, state)
 	headerString := ""
 	importsUsed := make(map[string]bool)

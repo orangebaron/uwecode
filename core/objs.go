@@ -7,12 +7,20 @@ type GlobalState struct {
 	Stop chan struct{}
 }
 
+func MakeGlobalState() GlobalState {
+	return GlobalState{&sync.WaitGroup{}, make(chan struct{})}
+}
+
 type SimplifyState struct {
 	GlobalState
 	*sync.Mutex
 	AlreadySimplified map[Obj]Obj
 	TryingToSimplify  map[Obj]chan struct{}
 	SimplifyStack     []Obj
+}
+
+func MakeSimplifyState() SimplifyState {
+	return SimplifyState{MakeGlobalState(), &sync.Mutex{}, make(map[Obj]Obj), make(map[Obj]chan struct{}), make([]Obj, 0)}
 }
 
 type Obj interface {
@@ -222,22 +230,22 @@ func (f Called) Simplify(state SimplifyState) Obj {
 		}
 		state.WaitGroup.Done()
 	}()
-	for {
-		select {
-		case v := <-returnVal:
-			close(newState.GlobalState.Stop)
-			state.Mutex.Lock()
-			state.AlreadySimplified[f] = v
-			close(state.TryingToSimplify[f])
-			state.Mutex.Unlock()
-			return v
-		case <-state.GlobalState.Stop:
-			close(newState.GlobalState.Stop)
-			state.Mutex.Lock()
-			close(state.TryingToSimplify[f])
-			state.Mutex.Unlock()
-			return f
-		}
+	select {
+	case v := <-returnVal:
+		close(newState.GlobalState.Stop)
+		state.Mutex.Lock()
+		state.AlreadySimplified[f] = v
+		close(state.TryingToSimplify[f])
+		delete(state.TryingToSimplify, f)
+		state.Mutex.Unlock()
+		return v
+	case <-state.GlobalState.Stop:
+		close(newState.GlobalState.Stop)
+		state.Mutex.Lock()
+		close(state.TryingToSimplify[f])
+		delete(state.TryingToSimplify, f)
+		state.Mutex.Unlock()
+		return f
 	}
 }
 func (f Called) Replace(n uint, x Obj) Obj {
