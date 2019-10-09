@@ -67,13 +67,12 @@ func (f Function) Call(a Obj) Obj {
 		close(unbound)
 	}()
 	unboundDict := make(map[uint]bool)
-functionCallOuter:
 	for {
-		select {
-		case n := <-unbound:
-			unboundDict[n] = true
-		default:
-			break functionCallOuter
+		val, isGood := <-unbound
+		if isGood {
+			unboundDict[val] = true
+		} else {
+			break
 		}
 	}
 	f = f.ReplaceBindings(unboundDict).(Function)
@@ -112,13 +111,12 @@ func (f Function) ReplaceBindings(toReplace map[uint]bool) Obj {
 		for k, v := range toReplace {
 			allVarsDict[k] = v
 		}
-	functionReplaceBindingsOuter:
 		for {
-			select {
-			case n := <-allVars:
-				allVarsDict[n] = true
-			default:
-				break functionReplaceBindingsOuter
+			val, isGood := <-allVars
+			if isGood {
+				allVarsDict[val] = true
+			} else {
+				break
 			}
 		}
 		var newN uint
@@ -266,12 +264,13 @@ func (f Called) GetUnboundVars(bound func(uint) bool, unbound chan uint) {
 	<-done
 }
 func (f Called) GetAllVars(vars chan uint) {
-	done := make(chan bool)
+	done := make(chan struct{})
 	go func() {
 		f.X.GetAllVars(vars)
 		close(done)
 	}()
 	f.Y.GetAllVars(vars)
+	<-done
 }
 func (f Called) ReplaceBindings(toReplace map[uint]bool) Obj {
 	return Called{f.X.ReplaceBindings(toReplace), f.Y.ReplaceBindings(toReplace)}
