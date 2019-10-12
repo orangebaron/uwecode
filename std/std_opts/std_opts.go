@@ -2,6 +2,7 @@ package std_opts
 
 import "../../../core"
 import "../../../optimize"
+import "sync"
 
 type ObjList struct {
 	Objs *[]core.Obj
@@ -14,14 +15,23 @@ func (f ObjList) Call(a core.Obj) core.Obj {
 		return core.Function{0, core.Called{a, core.Function{0, core.Called{core.Called{core.ReturnVal{0}, (*f.Objs)[0]}, MakeObjList((*f.Objs)[1:])}}}} //TODO: replace stuff?
 	}
 }
-func (f ObjList) Simplify(depth uint) core.Obj {
-	//TODO: this is slightly unsafe/nonfunctional, go ahead with it?
-	if depth > 0 {
-		for i, v := range *f.Objs {
-			(*f.Objs)[i] = v.Simplify(depth - 1)
-		}
+func (f ObjList) Simplify(state core.SimplifyState) core.Obj {
+	select {
+	case <-state.Stop:
+		return f
+	default:
 	}
-	return f
+	wg := sync.WaitGroup{}
+	wg.Add(len(*f.Objs))
+	newObjs := make([]core.Obj, len(*f.Objs))
+	for i, v := range *f.Objs {
+		go func() {
+			newObjs[i] = v.Simplify(state)
+			wg.Done()
+		}()
+	}
+	wg.Wait()
+	return ObjList{&newObjs}
 }
 func (f ObjList) Replace(n uint, a core.Obj) core.Obj {
 	newObjs := make([]core.Obj, len(*f.Objs))
@@ -83,12 +93,12 @@ func (f NumOpt) Call(x core.Obj) (returnVal core.Obj) {
 	}()
 	switch f.OperationType {
 	case Inc:
-		return core.ChurchNum{core.ObjToInt(x) + 1}
+		return core.ChurchNum{core.ObjToInt(x, state) + 1}
 	default:
 		return NumOpt2{f.OperationType, core.ObjToInt(x)}
 	}
 }
-func (f NumOpt) Simplify(_ uint) core.Obj                      { return f }
+func (f NumOpt) Simplify(_ core.SimplifyState) core.Obj        { return f }
 func (f NumOpt) Replace(_ uint, _ core.Obj) core.Obj           { return f }
 func (f NumOpt) GetUnboundVars(_ func(uint) bool, _ chan uint) {}
 func (f NumOpt) GetAllVars(_ chan uint)                        {}
@@ -123,7 +133,7 @@ func (f NumOpt2) Call(x core.Obj) (returnVal core.Obj) {
 		panic("unrecognized OperationType")
 	}
 }
-func (f NumOpt2) Simplify(_ uint) core.Obj                      { return f } // TODO: maybe make a "simplify into normal object form" function
+func (f NumOpt2) Simplify(_ core.SimplifyState) core.Obj        { return f } // TODO: maybe make a "simplify into normal object form" function
 func (f NumOpt2) Replace(_ uint, _ core.Obj) core.Obj           { return f }
 func (f NumOpt2) GetUnboundVars(_ func(uint) bool, _ chan uint) {}
 func (f NumOpt2) GetAllVars(_ chan uint)                        {} // TODO: f -> _?
@@ -202,40 +212,44 @@ func multOptHelper(f core.Obj) (bool, interface{}) {
 }
 
 var listOpt optimize.Optimization = optimize.Optimization{
-	func(f core.Obj, convert func(core.Obj) string) string {
+	func(f core.Obj, convert func(core.Obj) string, state core.GlobalState) string {
 		defer func() { recover() }()
 		str := "std_opts.MakeObjList([]core.Obj{"
 		for _, obj := range core.ObjToList(f) {
 			str += convert(obj) + ","
 		}
 		str += "})"
+		close(state.Stop)
 		return str
 	},
 	"./.uwe/opts/std_opts",
 }
 
 var incOpt optimize.Optimization = optimize.Optimization{
-	func(f core.Obj, convert func(core.Obj) string) string {
+	func(f core.Obj, convert func(core.Obj) string, state core.GlobalState) string {
 		defer func() { recover() }()
 		core.SimplifyUntil(incOptHelper, f.Call(core.ArbitraryVal{0}).Call(core.ArbitraryVal{1}).Call(core.ArbitraryVal{2}))
+		close(state.Stop)
 		return "std_opts.NumOpt{std_opts.Inc}"
 	},
 	"./.uwe/opts/std_opts",
 }
 
 var plusOpt optimize.Optimization = optimize.Optimization{
-	func(f core.Obj, convert func(core.Obj) string) string {
+	func(f core.Obj, convert func(core.Obj) string, state core.GlobalState) string {
 		defer func() { recover() }()
 		core.SimplifyUntil(plusOptHelper, f.Call(core.ArbitraryVal{3}))
+		close(state.Stop)
 		return "std_opts.NumOpt{std_opts.Plus}"
 	},
 	"./.uwe/opts/std_opts",
 }
 
 var multOpt optimize.Optimization = optimize.Optimization{
-	func(f core.Obj, convert func(core.Obj) string) string {
+	func(f core.Obj, convert func(core.Obj) string, state core.GlobalState) string {
 		defer func() { recover() }()
 		core.SimplifyUntil(multOptHelper, f.Call(core.ArbitraryVal{4}).Call(core.ArbitraryVal{5}))
+		close(state.Stop)
 		return "std_opts.NumOpt{std_opts.Mult}"
 	},
 	"./.uwe/opts/std_opts",

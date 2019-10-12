@@ -29,18 +29,18 @@ type StdController struct {
 	Commands   map[uint]*exec.Cmd
 }
 
-func (c StdController) GiveInput(pid string) core.Obj {
+func (c StdController) GiveInput(pid string, _ core.SimplifyState) core.Obj {
 	return c.NextInput[pid]
 }
-func (c StdController) TakeOutput(pid string, otp core.Obj) {
-	otpType, otpVal := core.ObjToTuple(otp)
-	switch CommandType(core.ObjToInt(otpType)) {
+func (c StdController) TakeOutput(pid string, otp core.Obj, state core.SimplifyState) {
+	otpType, otpVal := core.ObjToTuple(otp, state)
+	switch CommandType(core.ObjToInt(otpType, state)) {
 	case GetPid:
 		c.NextInput[pid] = core.ChurchTupleCharString{pid}
 	case WriteStdout:
-		fmt.Print(core.ObjToString(otpVal))
+		fmt.Print(core.ObjToString(otpVal, state))
 	case WriteStderr:
-		os.Stderr.WriteString(core.ObjToString(otpVal))
+		os.Stderr.WriteString(core.ObjToString(otpVal, state))
 	case ReadStdin:
 		reader := bufio.NewReader(os.Stdin)
 		text, err := reader.ReadString('\n') // TODO: what about just reading a single character
@@ -49,29 +49,29 @@ func (c StdController) TakeOutput(pid string, otp core.Obj) {
 		}
 		c.NextInput[pid] = core.ChurchTupleCharString{text}
 	case RunCommand:
-		cmd := exec.Command(core.ObjToString(otpVal))
+		cmd := exec.Command(core.ObjToString(otpVal, state))
 		*c.CommandNum++
 		c.Commands[*c.CommandNum] = cmd
 		cmd.Start()
 		c.NextInput[pid] = core.ChurchNum{*c.CommandNum}
 	case ReadCommandStdout:
-		cmdNum, size := core.ObjToTuple(otpVal)
-		str := make([]byte, core.ObjToInt(size))
-		pipe, _ := c.Commands[core.ObjToInt(cmdNum)].StdoutPipe()
+		cmdNum, size := core.ObjToTuple(otpVal, state)
+		str := make([]byte, core.ObjToInt(size, state))
+		pipe, _ := c.Commands[core.ObjToInt(cmdNum, state)].StdoutPipe()
 		pipe.Read(str)
 		c.NextInput[pid] = core.ChurchTupleCharString{string(str)}
 	case ReadCommandStderr:
-		cmdNum, size := core.ObjToTuple(otpVal)
-		str := make([]byte, core.ObjToInt(size))
-		pipe, _ := c.Commands[core.ObjToInt(cmdNum)].StderrPipe()
+		cmdNum, size := core.ObjToTuple(otpVal, state)
+		str := make([]byte, core.ObjToInt(size, state))
+		pipe, _ := c.Commands[core.ObjToInt(cmdNum, state)].StderrPipe()
 		pipe.Read(str)
 		c.NextInput[pid] = core.ChurchTupleCharString{string(str)}
 	case WriteCommandStdin:
-		cmdNum, str := core.ObjToTuple(otpVal)
-		pipe, _ := c.Commands[core.ObjToInt(cmdNum)].StdinPipe()
-		pipe.Write([]byte(core.ObjToString(str)))
+		cmdNum, str := core.ObjToTuple(otpVal, state)
+		pipe, _ := c.Commands[core.ObjToInt(cmdNum, state)].StdinPipe()
+		pipe.Write([]byte(core.ObjToString(str, state)))
 	case WaitForCommand:
-		c.Commands[core.ObjToInt(otpVal)].Wait()
+		c.Commands[core.ObjToInt(otpVal, state)].Wait()
 	default:
 		panic("Invalid command number")
 	} // TODO: communication between threads
