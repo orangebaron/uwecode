@@ -5,26 +5,26 @@ import "sync"
 type GlobalState struct {
 	*sync.WaitGroup
 	Stop chan struct{}
+	*sync.Mutex
+	AlreadySimplified map[Obj]Obj
+	TryingToSimplify  map[Obj]chan struct{}
 }
 
 func MakeGlobalState() GlobalState {
-	return GlobalState{&sync.WaitGroup{}, make(chan struct{})}
+	return GlobalState{&sync.WaitGroup{}, make(chan struct{}), &sync.Mutex{}, make(map[Obj]Obj), make(map[Obj]chan struct{})}
 }
 
 type SimplifyState struct {
 	GlobalState
-	*sync.Mutex
-	AlreadySimplified map[Obj]Obj
-	TryingToSimplify  map[Obj]chan struct{}
-	SimplifyStack     []Obj
+	SimplifyStack []Obj
 }
 
-func MakeSimplifyState() SimplifyState {
-	return SimplifyState{MakeGlobalState(), &sync.Mutex{}, make(map[Obj]Obj), make(map[Obj]chan struct{}), make([]Obj, 0)}
+func MakeSimplifyState(state GlobalState) SimplifyState {
+	return SimplifyState{state, make([]Obj, 0)}
 }
 
 type Obj interface {
-	Call(Obj) Obj
+	Call(Obj, GlobalState) Obj
 	Simplify(SimplifyState) Obj
 	Replace(uint, Obj) Obj
 	GetUnboundVars(func(uint) bool, chan uint)
@@ -37,8 +37,8 @@ type ReturnVal struct {
 	N uint
 }
 
-func (f ReturnVal) Call(x Obj) Obj               { return Called{f, x} }
-func (f ReturnVal) Simplify(_ SimplifyState) Obj { return f }
+func (f ReturnVal) Call(x Obj, _ GlobalState) Obj { return Called{f, x} }
+func (f ReturnVal) Simplify(_ SimplifyState) Obj  { return f }
 func (f ReturnVal) Replace(n uint, x Obj) Obj {
 	if n == f.N {
 		return x
@@ -60,7 +60,7 @@ type Function struct {
 	X Obj
 }
 
-func (f Function) Call(a Obj) Obj {
+func (f Function) Call(a Obj, _ GlobalState) Obj {
 	unbound := make(chan uint)
 	go func() {
 		a.GetUnboundVars(func(_ uint) bool { return false }, unbound)
@@ -135,7 +135,7 @@ type Called struct {
 	Y Obj
 }
 
-func (f Called) Call(a Obj) Obj { return Called{f.X.Call(f.Y), a} }
+func (f Called) Call(a Obj, state GlobalState) Obj { return Called{f.X.Call(f.Y, state), a} }
 func (f Called) Simplify(state SimplifyState) Obj {
 	select {
 	case <-state.Stop:
@@ -178,7 +178,7 @@ func (f Called) Simplify(state SimplifyState) Obj {
 	otherSimplifiedValMutex := &sync.Mutex{}
 	state.WaitGroup.Add(3)
 	go func() {
-		called := f.X.Call(f.Y)
+		called := f.X.Call(f.Y, state.GlobalState)
 		if called != f {
 			returnVal <- called.Simplify(newState)
 		}
@@ -190,14 +190,14 @@ func (f Called) Simplify(state SimplifyState) Obj {
 		if len(otherSimplifiedVal) == 0 {
 			otherSimplifiedVal <- newX
 			otherSimplifiedValMutex.Unlock()
-			called := newX.Call(f.Y)
+			called := newX.Call(f.Y, state.GlobalState)
 			if called != f {
 				returnVal <- called.Simplify(newState)
 			}
 		} else {
 			other := <-otherSimplifiedVal
 			otherSimplifiedValMutex.Unlock()
-			called := newX.Call(other)
+			called := newX.Call(other, state.GlobalState)
 			if called != f {
 				returnVal <- called.Simplify(newState)
 			} else {
@@ -212,14 +212,14 @@ func (f Called) Simplify(state SimplifyState) Obj {
 		if len(otherSimplifiedVal) == 0 {
 			otherSimplifiedVal <- newY
 			otherSimplifiedValMutex.Unlock()
-			called := f.X.Call(newY)
+			called := f.X.Call(newY, state.GlobalState)
 			if called != f {
 				returnVal <- called.Simplify(newState)
 			}
 		} else {
 			other := <-otherSimplifiedVal
 			otherSimplifiedValMutex.Unlock()
-			called := other.Call(newY)
+			called := other.Call(newY, state.GlobalState)
 			if called != f {
 				returnVal <- called.Simplify(newState)
 			} else {
@@ -281,7 +281,7 @@ type ChurchNum struct {
 	Num uint
 }
 
-func (f ChurchNum) Call(a Obj) Obj                                { return CalledChurchNum{f.Num, a} }
+func (f ChurchNum) Call(a Obj, _ GlobalState) Obj                 { return CalledChurchNum{f.Num, a} }
 func (f ChurchNum) Simplify(_ SimplifyState) Obj                  { return f }
 func (f ChurchNum) Replace(_ uint, _ Obj) Obj                     { return f }
 func (f ChurchNum) GetUnboundVars(_ func(uint) bool, _ chan uint) {}
@@ -294,9 +294,9 @@ type CalledChurchNum struct {
 	X   Obj
 }
 
-func (f CalledChurchNum) Call(a Obj) Obj {
+func (f CalledChurchNum) Call(a Obj, state GlobalState) Obj {
 	for i := uint(0); i < f.Num; i++ {
-		a = f.X.Call(a)
+		a = f.X.Call(a, state)
 	}
 	return a
 }
@@ -333,7 +333,7 @@ func (f ChurchTupleChar) ToNormalObj() Obj {
 	}
 	return tuple(tuple(tuple(bools[0], bools[1]), tuple(bools[2], bools[3])), tuple(tuple(bools[4], bools[5]), tuple(bools[6], bools[7])))
 }
-func (f ChurchTupleChar) Call(a Obj) Obj                                { return Called{f.ToNormalObj(), a} }
+func (f ChurchTupleChar) Call(a Obj, _ GlobalState) Obj                 { return Called{f.ToNormalObj(), a} }
 func (f ChurchTupleChar) Simplify(_ SimplifyState) Obj                  { return f }
 func (f ChurchTupleChar) Replace(_ uint, _ Obj) Obj                     { return f }
 func (f ChurchTupleChar) GetUnboundVars(_ func(uint) bool, _ chan uint) {}
@@ -354,7 +354,7 @@ func (f ChurchTupleCharString) ToNormalObj() Obj {
 		return just(tuple(ChurchTupleChar{f.Str[0]}, ChurchTupleCharString{f.Str[1:]}))
 	}
 }
-func (f ChurchTupleCharString) Call(a Obj) Obj                                { return Called{f.ToNormalObj(), a} }
+func (f ChurchTupleCharString) Call(a Obj, _ GlobalState) Obj                 { return Called{f.ToNormalObj(), a} }
 func (f ChurchTupleCharString) Simplify(_ SimplifyState) Obj                  { return f }
 func (f ChurchTupleCharString) Replace(_ uint, _ Obj) Obj                     { return f }
 func (f ChurchTupleCharString) GetUnboundVars(_ func(uint) bool, _ chan uint) {}

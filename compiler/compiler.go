@@ -37,7 +37,7 @@ func makeGoFile(filename string, importStrings []string) error {
 		goifiedImportString += "import\"" + v + "\"\n"
 	}
 	projNameSplit := strings.Split(importStrings[0], "/")
-	str := fmt.Sprintf("package main\n\nimport \"./core\"\n%s%svar mainObj core.Obj = %s\nfunc main() {\n\tcore.RunProcess(mainObj, %s.NewController(), make(chan struct{}))\n}\n", goifiedImportString, head, optimizedObj, projNameSplit[len(projNameSplit)-1]) // TODO: ./core -> github link
+	str := fmt.Sprintf("package main\n\nimport \"./core\"\n%s%svar mainObj core.Obj = %s\nfunc main() {\n\tcore.RunProcess(mainObj, %s.NewController(), make(chan struct{}), core.MakeGlobalState())\n}\n", goifiedImportString, head, optimizedObj, projNameSplit[len(projNameSplit)-1]) // TODO: ./core -> github link
 	err = ioutil.WriteFile(filename+".go", []byte(str), 0644)
 	if err != nil {
 		return err

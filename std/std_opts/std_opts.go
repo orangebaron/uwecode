@@ -8,7 +8,7 @@ type ObjList struct {
 	Objs *[]core.Obj
 }
 
-func (f ObjList) Call(a core.Obj) core.Obj {
+func (f ObjList) Call(a core.Obj, _ core.GlobalState) core.Obj {
 	if len(*f.Objs) == 0 {
 		return core.Function{0, core.ReturnVal{0}}
 	} else {
@@ -74,7 +74,7 @@ type NumOpt struct {
 	OperationType
 }
 
-func (f NumOpt) Call(x core.Obj) (returnVal core.Obj) {
+func (f NumOpt) Call(x core.Obj, state core.GlobalState) (returnVal core.Obj) {
 	defer func() {
 		if recover() != nil {
 			var fReal core.Obj
@@ -88,14 +88,14 @@ func (f NumOpt) Call(x core.Obj) (returnVal core.Obj) {
 			default:
 				panic("unknown OperationType")
 			}
-			returnVal = fReal.Call(x)
+			returnVal = fReal.Call(x, state)
 		}
 	}()
 	switch f.OperationType {
 	case Inc:
 		return core.ChurchNum{core.ObjToInt(x, state) + 1}
 	default:
-		return NumOpt2{f.OperationType, core.ObjToInt(x)}
+		return NumOpt2{f.OperationType, core.ObjToInt(x, state)}
 	}
 }
 func (f NumOpt) Simplify(_ core.SimplifyState) core.Obj        { return f }
@@ -109,26 +109,26 @@ type NumOpt2 struct {
 	Num uint
 }
 
-func (f NumOpt2) Call(x core.Obj) (returnVal core.Obj) {
+func (f NumOpt2) Call(x core.Obj, state core.GlobalState) (returnVal core.Obj) {
 	defer func() {
 		if recover() != nil { // TODO: check specific error message
 			var fReal core.Obj
 			switch f.OperationType {
 			case Plus:
-				fReal = core.ChurchNum{f.Num}.Call(NumOpt{Inc})
+				fReal = core.ChurchNum{f.Num}.Call(NumOpt{Inc}, state)
 			case Mult:
 				fReal = core.Function{0, core.Called{core.Called{core.ReturnVal{0}, core.Called{NumOpt{Plus}, core.ChurchNum{f.Num}}}, core.ChurchNum{0}}}
 			default:
 				panic("unrecognized OperationType")
 			}
-			returnVal = fReal.Call(x)
+			returnVal = fReal.Call(x, state)
 		}
 	}()
 	switch f.OperationType {
 	case Plus:
-		return core.ChurchNum{f.Num + core.ObjToInt(x)}
+		return core.ChurchNum{f.Num + core.ObjToInt(x, state)}
 	case Mult:
-		return core.ChurchNum{f.Num * core.ObjToInt(x)}
+		return core.ChurchNum{f.Num * core.ObjToInt(x, state)}
 	default:
 		panic("unrecognized OperationType")
 	}
@@ -139,7 +139,7 @@ func (f NumOpt2) GetUnboundVars(_ func(uint) bool, _ chan uint) {}
 func (f NumOpt2) GetAllVars(_ chan uint)                        {} // TODO: f -> _?
 func (f NumOpt2) ReplaceBindings(_ map[uint]bool) core.Obj      { return f }
 
-func incOptHelper(f core.Obj) (bool, interface{}) {
+func incOptHelper(f core.Obj, _ core.GlobalState) (bool, interface{}) {
 	called1, isCalled1 := f.(core.Called)
 	if !isCalled1 {
 		return false, nil
@@ -171,7 +171,7 @@ func incOptHelper(f core.Obj) (bool, interface{}) {
 	return true, nil
 }
 
-func plusOptHelper(f core.Obj) (bool, interface{}) {
+func plusOptHelper(f core.Obj, state core.GlobalState) (bool, interface{}) {
 	called, isCalled := f.(core.Called)
 	if !isCalled {
 		return false, nil
@@ -181,14 +181,14 @@ func plusOptHelper(f core.Obj) (bool, interface{}) {
 		return false, nil
 	}
 	defer func() { recover() }()
-	core.SimplifyUntil(incOptHelper, called.Y.Call(core.ArbitraryVal{0}).Call(core.ArbitraryVal{1}).Call(core.ArbitraryVal{2}))
+	core.SimplifyUntil(incOptHelper, called.Y.Call(core.ArbitraryVal{0}, state).Call(core.ArbitraryVal{1}, state).Call(core.ArbitraryVal{2}, state), state)
 	return true, nil
 }
 
-func multOptHelper(f core.Obj) (bool, interface{}) {
+func multOptHelper(f core.Obj, state core.GlobalState) (bool, interface{}) {
 	defer func() { recover() }()
 	called1, isCalled1 := f.(core.Called)
-	if !isCalled1 || core.ObjToInt(called1.Y) != 0 {
+	if !isCalled1 || core.ObjToInt(called1.Y, state) != 0 {
 		return false, nil
 	}
 	called2, isCalled2 := called1.X.(core.Called)
@@ -207,16 +207,16 @@ func multOptHelper(f core.Obj) (bool, interface{}) {
 	if !isArb2 || arb2.ID != 4 {
 		return false, nil
 	}
-	core.SimplifyUntil(plusOptHelper, called3.X.Call(core.ArbitraryVal{3}))
+	core.SimplifyUntil(plusOptHelper, called3.X.Call(core.ArbitraryVal{3}, state), state)
 	return true, nil
 }
 
 var listOpt optimize.Optimization = optimize.Optimization{
-	func(f core.Obj, convert func(core.Obj) string, state core.GlobalState) string {
+	func(f core.Obj, convert func(core.Obj, core.GlobalState) string, state core.GlobalState) string {
 		defer func() { recover() }()
 		str := "std_opts.MakeObjList([]core.Obj{"
-		for _, obj := range core.ObjToList(f) {
-			str += convert(obj) + ","
+		for _, obj := range core.ObjToList(f, state) {
+			str += convert(obj, state) + ","
 		}
 		str += "})"
 		close(state.Stop)
@@ -226,9 +226,9 @@ var listOpt optimize.Optimization = optimize.Optimization{
 }
 
 var incOpt optimize.Optimization = optimize.Optimization{
-	func(f core.Obj, convert func(core.Obj) string, state core.GlobalState) string {
+	func(f core.Obj, convert func(core.Obj, core.GlobalState) string, state core.GlobalState) string {
 		defer func() { recover() }()
-		core.SimplifyUntil(incOptHelper, f.Call(core.ArbitraryVal{0}).Call(core.ArbitraryVal{1}).Call(core.ArbitraryVal{2}))
+		core.SimplifyUntil(incOptHelper, f.Call(core.ArbitraryVal{0}, state).Call(core.ArbitraryVal{1}, state).Call(core.ArbitraryVal{2}, state), state)
 		close(state.Stop)
 		return "std_opts.NumOpt{std_opts.Inc}"
 	},
@@ -236,9 +236,9 @@ var incOpt optimize.Optimization = optimize.Optimization{
 }
 
 var plusOpt optimize.Optimization = optimize.Optimization{
-	func(f core.Obj, convert func(core.Obj) string, state core.GlobalState) string {
+	func(f core.Obj, convert func(core.Obj, core.GlobalState) string, state core.GlobalState) string {
 		defer func() { recover() }()
-		core.SimplifyUntil(plusOptHelper, f.Call(core.ArbitraryVal{3}))
+		core.SimplifyUntil(plusOptHelper, f.Call(core.ArbitraryVal{3}, state), state)
 		close(state.Stop)
 		return "std_opts.NumOpt{std_opts.Plus}"
 	},
@@ -246,9 +246,9 @@ var plusOpt optimize.Optimization = optimize.Optimization{
 }
 
 var multOpt optimize.Optimization = optimize.Optimization{
-	func(f core.Obj, convert func(core.Obj) string, state core.GlobalState) string {
+	func(f core.Obj, convert func(core.Obj, core.GlobalState) string, state core.GlobalState) string {
 		defer func() { recover() }()
-		core.SimplifyUntil(multOptHelper, f.Call(core.ArbitraryVal{4}).Call(core.ArbitraryVal{5}))
+		core.SimplifyUntil(multOptHelper, f.Call(core.ArbitraryVal{4}, state).Call(core.ArbitraryVal{5}, state), state)
 		close(state.Stop)
 		return "std_opts.NumOpt{std_opts.Mult}"
 	},

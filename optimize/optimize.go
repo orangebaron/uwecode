@@ -5,26 +5,26 @@ import "fmt"
 import "sync"
 
 type Optimization struct {
-	ConversionFunc func(core.Obj, func(core.Obj) string, core.SimplifyState) string
+	ConversionFunc func(core.Obj, func(core.Obj, core.GlobalState) string, core.GlobalState) string
 	Import         string
 }
 
-func OptimizeObjHelper(opts []*Optimization, optsUsed map[*Optimization]bool, obj core.Obj, state core.SimplifyState) string {
+func OptimizeObjHelper(opts []*Optimization, optsUsed map[*Optimization]bool, obj core.Obj, state core.GlobalState) string {
 	select {
-	case <-state.GlobalState.Stop:
+	case <-state.Stop:
 		return fmt.Sprintf("%#v", obj)
 	default:
 	}
 	mutex := &sync.Mutex{}
 	newState := state
-	newState.GlobalState.Stop = make(chan struct{})
+	newState.Stop = make(chan struct{})
 	returnVal := ""
-	newState.GlobalState.WaitGroup.Add(len(opts))
+	newState.WaitGroup.Add(len(opts))
 	for _, opt := range opts {
 		go func() {
-			str := opt.ConversionFunc(obj, func(a core.Obj) string { return OptimizeObjHelper(opts, optsUsed, a, newState) }, newState)
+			str := opt.ConversionFunc(obj, func(a core.Obj, _ core.GlobalState) string { return OptimizeObjHelper(opts, optsUsed, a, newState) }, newState)
 			if str == "" {
-				newState.GlobalState.WaitGroup.Done()
+				newState.WaitGroup.Done()
 				return
 			}
 			mutex.Lock()
@@ -32,24 +32,24 @@ func OptimizeObjHelper(opts []*Optimization, optsUsed map[*Optimization]bool, ob
 				returnVal = str
 			}
 			select {
-			case <-newState.GlobalState.Stop:
+			case <-newState.Stop:
 			default:
-				close(newState.GlobalState.Stop)
+				close(newState.Stop)
 			}
 			mutex.Unlock()
-			newState.GlobalState.WaitGroup.Done()
+			newState.WaitGroup.Done()
 		}()
 	}
 	select {
-	case <-state.GlobalState.Stop:
+	case <-state.Stop:
 		defer func() {
 			defer func() { recover() }()
 			mutex.Lock()
-			close(newState.GlobalState.Stop)
+			close(newState.Stop)
 			mutex.Unlock()
 		}()
 		return fmt.Sprintf("%#v", obj)
-	case <-newState.GlobalState.Stop:
+	case <-newState.Stop:
 		mutex.Lock()
 		val := returnVal
 		mutex.Unlock()
@@ -58,21 +58,21 @@ func OptimizeObjHelper(opts []*Optimization, optsUsed map[*Optimization]bool, ob
 }
 
 var DefaultOpt = Optimization{
-	func(obj core.Obj, simp func(core.Obj) string, state core.SimplifyState) string {
+	func(obj core.Obj, simp func(core.Obj, core.GlobalState) string, state core.GlobalState) string {
 		// TODO: time it and wait that time before u do the thing
 		var val string
 		switch v := obj.(type) {
 		case core.Function:
-			val = fmt.Sprintf("core.Function{%d,%s}", v.N, simp(v.X))
+			val = fmt.Sprintf("core.Function{%d,%s}", v.N, simp(v.X, state))
 		case core.Called:
-			val = fmt.Sprintf("core.Called{%s,%s}", simp(v.X), simp(v.Y))
+			val = fmt.Sprintf("core.Called{%s,%s}", simp(v.X, state), simp(v.Y, state))
 		case core.CalledChurchNum:
-			val = fmt.Sprintf("core.CalledChurchNum{%d,%s}", v.Num, simp(v.X))
+			val = fmt.Sprintf("core.CalledChurchNum{%d,%s}", v.Num, simp(v.X, state))
 		default:
 			val = fmt.Sprintf("%#v", obj)
 		}
 		defer func() { recover() }()
-		close(state.GlobalState.Stop)
+		close(state.Stop)
 		return val
 	},
 	"",
@@ -80,7 +80,7 @@ var DefaultOpt = Optimization{
 
 func OptimizeObj(opts []*Optimization, obj core.Obj) (string, string) {
 	optsUsed := make(map[*Optimization]bool)
-	state := core.MakeSimplifyState()
+	state := core.MakeGlobalState()
 	mainString := OptimizeObjHelper(append(opts, &DefaultOpt), optsUsed, obj, state)
 	headerString := ""
 	importsUsed := make(map[string]bool)
@@ -94,6 +94,6 @@ func OptimizeObj(opts []*Optimization, obj core.Obj) (string, string) {
 			headerString += fmt.Sprintf("import \"%s\"\n", imp)
 		}
 	}
-	state.GlobalState.WaitGroup.Wait()
+	state.WaitGroup.Wait()
 	return headerString, mainString
 }

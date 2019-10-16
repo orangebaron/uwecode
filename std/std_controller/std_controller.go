@@ -29,10 +29,10 @@ type StdController struct {
 	Commands   map[uint]*exec.Cmd
 }
 
-func (c StdController) GiveInput(pid string, _ core.SimplifyState) core.Obj {
+func (c StdController) GiveInput(pid string, _ core.GlobalState) core.Obj {
 	return c.NextInput[pid]
 }
-func (c StdController) TakeOutput(pid string, otp core.Obj, state core.SimplifyState) {
+func (c StdController) TakeOutput(pid string, otp core.Obj, state core.GlobalState) {
 	otpType, otpVal := core.ObjToTuple(otp, state)
 	switch CommandType(core.ObjToInt(otpType, state)) {
 	case GetPid:

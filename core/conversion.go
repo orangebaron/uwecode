@@ -5,14 +5,14 @@ type ArbitraryVal struct {
 	ID uint
 }
 
-func (f ArbitraryVal) Call(x Obj) Obj                                { return Called{f, x} }
+func (f ArbitraryVal) Call(x Obj, _ GlobalState) Obj                 { return Called{f, x} }
 func (f ArbitraryVal) Simplify(_ SimplifyState) Obj                  { return f }
 func (f ArbitraryVal) Replace(_ uint, _ Obj) Obj                     { return f }
 func (f ArbitraryVal) GetUnboundVars(_ func(uint) bool, _ chan uint) {}
 func (f ArbitraryVal) GetAllVars(_ chan uint)                        {}
 func (f ArbitraryVal) ReplaceBindings(_ map[uint]bool) Obj           { return f }
 
-func objToIntHelper(f Obj) (bool, interface{}) {
+func objToIntHelper(f Obj, _ GlobalState) (bool, interface{}) {
 	n := uint(0)
 	for {
 		switch v := f.(type) {
@@ -30,24 +30,24 @@ func objToIntHelper(f Obj) (bool, interface{}) {
 		}
 	}
 }
-func ObjToInt(f Obj, state SimplifyState) uint {
+func ObjToInt(f Obj, state GlobalState) uint {
 	cn, isChurchNum := f.(ChurchNum)
 	if isChurchNum {
 		return cn.Num
 	} else {
-		return SimplifyUntil(objToIntHelper, f.Call(ArbitraryVal{0}).Call(ArbitraryVal{1}), state).(uint)
+		return SimplifyUntil(objToIntHelper, f.Call(ArbitraryVal{0}, state).Call(ArbitraryVal{1}, state), state).(uint)
 	}
 }
 
-func objToBoolHelper(f Obj) (bool, interface{}) {
+func objToBoolHelper(f Obj, _ GlobalState) (bool, interface{}) {
 	arb, isArb := f.(ArbitraryVal)
 	return isArb, (isArb && arb.ID == 0)
 }
-func ObjToBool(f Obj, state SimplifyState) bool {
-	return SimplifyUntil(objToBoolHelper, f.Call(ArbitraryVal{0}).Call(ArbitraryVal{1}), state).(bool)
+func ObjToBool(f Obj, state GlobalState) bool {
+	return SimplifyUntil(objToBoolHelper, f.Call(ArbitraryVal{0}, state).Call(ArbitraryVal{1}, state), state).(bool)
 }
 
-func objToTupleHelper(f Obj) (bool, interface{}) {
+func objToTupleHelper(f Obj, _ GlobalState) (bool, interface{}) {
 	called, isCalled := f.(Called)
 	if !isCalled {
 		return false, nil
@@ -59,8 +59,8 @@ func objToTupleHelper(f Obj) (bool, interface{}) {
 	_, isArb := called2.X.(ArbitraryVal) // TODO: check the ID??????
 	return isArb, [2]Obj{called2.Y, called.Y}
 }
-func ObjToTuple(f Obj, state SimplifyState) (Obj, Obj) {
-	x := SimplifyUntil(objToTupleHelper, f.Call(ArbitraryVal{0}), state).([2]Obj)
+func ObjToTuple(f Obj, state GlobalState) (Obj, Obj) {
+	x := SimplifyUntil(objToTupleHelper, f.Call(ArbitraryVal{0}, state), state).([2]Obj)
 	return x[0], x[1]
 }
 
@@ -69,7 +69,7 @@ type maybeEither struct {
 	Obj
 }
 
-func objToMaybeHelper(f Obj) (bool, interface{}) {
+func objToMaybeHelper(f Obj, _ GlobalState) (bool, interface{}) {
 	called, isCalled := f.(Called)
 	if isCalled {
 		arb, isArb := called.X.(ArbitraryVal)
@@ -79,12 +79,12 @@ func objToMaybeHelper(f Obj) (bool, interface{}) {
 		return isArb && arb.ID == 1, maybeEither{false, nil}
 	}
 }
-func ObjToMaybe(f Obj, state SimplifyState) (bool, Obj) {
-	maybe := SimplifyUntil(objToMaybeHelper, f.Call(ArbitraryVal{0}).Call(ArbitraryVal{1}), state).(maybeEither)
+func ObjToMaybe(f Obj, state GlobalState) (bool, Obj) {
+	maybe := SimplifyUntil(objToMaybeHelper, f.Call(ArbitraryVal{0}, state).Call(ArbitraryVal{1}, state), state).(maybeEither)
 	return maybe.b, maybe.Obj
 }
 
-func objToEitherHelper(f Obj) (bool, interface{}) {
+func objToEitherHelper(f Obj, _ GlobalState) (bool, interface{}) {
 	called, isCalled := f.(Called)
 	if !isCalled {
 		return false, nil
@@ -92,12 +92,12 @@ func objToEitherHelper(f Obj) (bool, interface{}) {
 	arb, isArb := called.X.(ArbitraryVal)
 	return isArb, maybeEither{arb.ID == 1, called.Y}
 }
-func ObjToEither(f Obj, state SimplifyState) (bool, Obj) {
-	either := SimplifyUntil(objToEitherHelper, f.Call(ArbitraryVal{0}).Call(ArbitraryVal{1}), state).(maybeEither)
+func ObjToEither(f Obj, state GlobalState) (bool, Obj) {
+	either := SimplifyUntil(objToEitherHelper, f.Call(ArbitraryVal{0}, state).Call(ArbitraryVal{1}, state), state).(maybeEither)
 	return either.b, either.Obj
 }
 
-func splitTupleList(fs []Obj, state SimplifyState) []Obj {
+func splitTupleList(fs []Obj, state GlobalState) []Obj {
 	returnVal := make([]Obj, len(fs)*2)
 	for i, f := range fs {
 		returnVal[i*2], returnVal[i*2+1] = ObjToTuple(f, state)
@@ -105,7 +105,7 @@ func splitTupleList(fs []Obj, state SimplifyState) []Obj {
 	return returnVal
 }
 
-func ObjToByte(f Obj, state SimplifyState) byte {
+func ObjToByte(f Obj, state GlobalState) byte {
 	churchChar, isChurchChar := f.(ChurchTupleChar)
 	if isChurchChar {
 		return churchChar.Char
@@ -121,7 +121,7 @@ func ObjToByte(f Obj, state SimplifyState) byte {
 	}
 }
 
-func ObjToList(f Obj, state SimplifyState) []Obj {
+func ObjToList(f Obj, state GlobalState) []Obj {
 	isSomething, val := ObjToMaybe(f, state)
 	if isSomething {
 		head, tail := ObjToTuple(val, state)
@@ -131,7 +131,7 @@ func ObjToList(f Obj, state SimplifyState) []Obj {
 	}
 }
 
-func ObjToString(f Obj, state SimplifyState) string {
+func ObjToString(f Obj, state GlobalState) string {
 	churchString, isChurchString := f.(ChurchTupleCharString)
 	if isChurchString {
 		return churchString.Str
@@ -145,7 +145,7 @@ func ObjToString(f Obj, state SimplifyState) string {
 	}
 }
 
-func ObjToIO(f Obj, state SimplifyState) IO {
+func ObjToIO(f Obj, state GlobalState) IO {
 	isRight, val := ObjToEither(f, state)
 	if isRight {
 		isFork, val2 := ObjToMaybe(val, state)
